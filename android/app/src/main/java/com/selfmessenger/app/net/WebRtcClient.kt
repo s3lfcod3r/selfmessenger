@@ -47,9 +47,11 @@ class WebRtcClient(
     private var capturer: CameraVideoCapturer? = null
     private var surfaceHelper: SurfaceTextureHelper? = null
     var localVideoTrack: VideoTrack? = null; private set
+    private var localAudioTrack: org.webrtc.AudioTrack? = null
 
     var onRemoteVideo: ((VideoTrack) -> Unit)? = null
     var onLocalVideo: ((VideoTrack) -> Unit)? = null
+    var onRemoteTrackKind: ((String) -> Unit)? = null   // "audio"/"video" — für eingehende Anrufe (auch Sprache)
 
     val eglContext: EglBase.Context get() = eglBase.eglBaseContext
 
@@ -84,7 +86,8 @@ class WebRtcClient(
         val peer = pc ?: return
         val aSource = factory.createAudioSource(MediaConstraints())
         audioSource = aSource
-        peer.addTrack(factory.createAudioTrack("audio0", aSource), listOf("stream0"))
+        val aTrack = factory.createAudioTrack("audio0", aSource); localAudioTrack = aTrack
+        peer.addTrack(aTrack, listOf("stream0"))
         if (video) {
             val enumerator = Camera2Enumerator(appCtx)
             val device = enumerator.deviceNames.firstOrNull { enumerator.isFrontFacing(it) }
@@ -101,11 +104,14 @@ class WebRtcClient(
         }
     }
 
+    fun setMicEnabled(on: Boolean) { localAudioTrack?.setEnabled(on) }
+    fun setCamEnabled(on: Boolean) { localVideoTrack?.setEnabled(on) }
+
     fun hangupCall() {
         try { capturer?.stopCapture() } catch (_: Exception) {}
         capturer?.dispose(); capturer = null
         surfaceHelper?.dispose(); surfaceHelper = null
-        localVideoTrack = null
+        localVideoTrack = null; localAudioTrack = null
     }
 
     fun onRemoteDesc(desc: JSONObject) {
@@ -181,6 +187,7 @@ class WebRtcClient(
         override fun onRenegotiationNeeded() { createOfferAndSend() }
         override fun onAddTrack(receiver: RtpReceiver?, streams: Array<out MediaStream>?) {
             val track = receiver?.track()
+            track?.kind()?.let { onRemoteTrackKind?.invoke(it) }
             if (track is VideoTrack) onRemoteVideo?.invoke(track)
         }
     }

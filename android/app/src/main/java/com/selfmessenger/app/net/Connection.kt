@@ -33,9 +33,21 @@ class Connection(
     var onRemoteVideo: ((VideoTrack) -> Unit)? = null
     // Medien: (fromMe, kind, name, mime, bytes)
     var onMedia: ((Boolean, String, String, String, ByteArray) -> Unit)? = null
+    // Anruf-Ereignisse (WhatsApp-Stil)
+    var onIncomingCall: ((video: Boolean) -> Unit)? = null   // eingehender Anruf -> Annehmen-Ansicht
+    var onCallConnected: (() -> Unit)? = null                 // Gegenseite hat Medien -> verbunden
+    private var callActive = false
+    private var callVideo = false
 
-    fun startCall(video: Boolean) = rtc?.startCall(video)
-    fun hangupCall() = rtc?.hangupCall()
+    fun startCall(video: Boolean) { callActive = true; callVideo = video; rtc?.startCall(video) }
+    fun acceptCall() { callActive = true; rtc?.startCall(callVideo) }   // Mikro/Kamera passend zum eingehenden Anruf
+    fun hangupCall() { callActive = false; callVideo = false; rtc?.hangupCall() }
+    fun setMicEnabled(on: Boolean) = rtc?.setMicEnabled(on)
+    fun setCamEnabled(on: Boolean) = rtc?.setCamEnabled(on)
+    private fun onRemoteTrack(kind: String) {
+        if (kind == "video") callVideo = true
+        if (!callActive) ui { onIncomingCall?.invoke(callVideo) } else ui { onCallConnected?.invoke() }
+    }
 
     fun start() {
         val room = CryptoSession.rendezvous(me.pubB64, contact.pubB64)
@@ -60,6 +72,7 @@ class Connection(
                 )
                 client.onLocalVideo = { t -> ui { onLocalVideo?.invoke(t) } }
                 client.onRemoteVideo = { t -> ui { onRemoteVideo?.invoke(t) } }
+                client.onRemoteTrackKind = { kind -> onRemoteTrack(kind) }
                 rtc = client
                 client.start(initiator)
             }
