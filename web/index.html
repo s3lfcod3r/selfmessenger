@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SelfMessenger</title>
+<link rel="icon" href="brand/shield.png" />
+<script src="qrcode.js"></script>
+<script src="olm.js"></script>
+<style>
+  /* Wortmarken-Schrift Orbitron — self-hosted (Self-Brand-Regel: NIE Google Fonts) */
+  @font-face{font-family:"Orbitron";src:url("fonts/Orbitron.ttf") format("truetype");font-weight:400 900;font-display:swap}
+  :root{ /* Self Design Tokens (brand-kit/tokens.css) */
+    --bg:#080c11;--panel:#161b22;--panel2:#0d1117;--line:rgba(157,189,208,.10);--line-strong:rgba(157,189,208,.22);
+    --ink:#eef4f7;--muted:#8a9caa;
+    --a:#33a78c;--a2:#1f7763;--a-bright:#43d3ad;--ice:#9dbdd0;--warn:#d29922;--bad:#f85149;
+    --mono:"IBM Plex Mono",ui-monospace,'Cascadia Code',Consolas,monospace;
+    --sans:"Exo 2",system-ui,'Segoe UI',Roboto,sans-serif;--wordmark:"Orbitron",var(--sans)}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1000px 500px at 50% -10%,#12203012,transparent),var(--bg);
+    color:var(--ink);font-family:var(--sans);min-height:100vh;display:flex;flex-direction:column;
+    align-items:center;padding:22px 16px 40px}
+  .wrap{width:100%;max-width:520px}
+  h1{font-size:20px;margin:0 0 2px;letter-spacing:-.02em}h1 span{color:var(--a)}
+  .brand-logo{display:block;width:172px;height:auto;margin:6px auto 4px;filter:drop-shadow(var(--self-glow-teal,0 0 60px -12px rgba(51,167,140,.45)))}
+  .wordmark{font-family:var(--wordmark);font-weight:800;letter-spacing:.01em}
+  .wordmark .self{color:var(--ice)}.wordmark .name{color:var(--a)}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 16px}
+  .sub.intro{text-align:center;max-width:420px;margin:0 auto 18px}
+  .legal-footer{text-align:center;font-size:12px;color:var(--muted);margin:16px 0 0}
+  .legal-footer a{color:var(--muted);text-decoration:none}.legal-footer a:hover{color:var(--a)}
+  .card{background:linear-gradient(180deg,var(--panel),#0d141d);border:1px solid var(--line);
+    border-radius:16px;padding:16px;margin-bottom:12px}
+  .card h2{font-size:13px;margin:0 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+  .row{display:flex;gap:8px;align-items:center}
+  input[type=text],textarea{flex:1;background:#0c1620;border:1px solid var(--line);border-radius:11px;padding:10px 12px;
+    color:var(--ink);font-size:14px;font-family:var(--sans);width:100%}
+  textarea{font-family:var(--mono);font-size:11px;resize:vertical;min-height:52px}
+  input:focus,textarea:focus{outline:none;border-color:var(--a2)}
+  button{border:none;background:var(--a);color:#04120d;font-weight:700;border-radius:11px;
+    padding:0 14px;cursor:pointer;font-size:14px;height:40px;white-space:nowrap}
+  button.ghost{background:#0c1620;border:1px solid var(--line);color:var(--ink)}
+  button.icon{background:#0c1620;border:1px solid var(--line);color:var(--ink);padding:0 11px;font-size:16px}
+  button.icon.rec{color:var(--bad);border-color:var(--bad)}
+  button:disabled{opacity:.35;cursor:not-allowed}
+  .qr{display:flex;gap:12px;align-items:center;margin-top:4px}
+  .qr .box{background:#fff;padding:6px;border-radius:10px;line-height:0}
+  .qr img{display:block;image-rendering:pixelated;width:120px;height:120px}
+  .me-line{font-family:var(--mono);font-size:12px;color:var(--muted);margin:0 0 10px}
+  .me-line b{color:var(--ink)}
+  .contact{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;
+    background:#0c1620;border:1px solid var(--line);border-radius:11px;margin-top:8px}
+  .contact .info{font-size:14px}.contact .fp{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+  .empty{color:var(--muted);font-size:13px;text-align:center;padding:14px 0}
+  .status{font-size:12.5px;font-family:var(--mono);color:var(--muted);margin:10px 2px 0;min-height:16px}
+  .status.ok{color:var(--a)}.status.wait{color:var(--warn)}.status.bad{color:var(--bad)}
+  .safety{display:none;font-family:var(--mono);font-size:12px;background:#0c1620;border:1px solid var(--line);
+    border-radius:10px;padding:8px 10px;margin:10px 0 0;color:var(--muted)}.safety b{color:var(--ink)}
+  #chatScreen{display:none}
+  .call{display:none;flex-direction:column;gap:8px;margin:0 0 12px;padding:10px;background:#0c1620;border:1px solid var(--line);border-radius:12px}
+  .videos{display:flex;gap:8px}
+  .call video{width:100%;max-width:160px;height:120px;object-fit:cover;background:#000;border-radius:9px;border:1px solid var(--line)}
+  .callbar{display:flex;gap:8px;align-items:center;justify-content:space-between}.callbar .st{font-family:var(--mono);font-size:12px;color:var(--a)}
+  .log{height:250px;overflow:auto;display:flex;flex-direction:column;gap:7px;padding:6px 2px}
+  .msg{max-width:82%;padding:8px 11px;border-radius:13px;font-size:13.5px;line-height:1.35;word-wrap:break-word}
+  .msg.self{align-self:flex-end;background:#173a31;border:1px solid #245a4a;border-bottom-right-radius:4px}
+  .msg.them{align-self:flex-start;background:#141d2a;border:1px solid var(--line);border-bottom-left-radius:4px}
+  .msg.sys{align-self:center;background:transparent;color:var(--muted);font-size:11.5px;font-family:var(--mono)}
+  .msg .m{opacity:.5;font-size:10px;font-family:var(--mono);display:block;margin-top:3px}
+  .msg img{max-width:200px;border-radius:9px;display:block;margin-bottom:2px}
+  .msg audio{width:230px;display:block;margin-bottom:2px}
+  .msg a.file{color:var(--a);text-decoration:none;font-family:var(--mono);font-size:12.5px}
+  .msg .prog{height:4px;background:#0c1620;border-radius:3px;overflow:hidden;margin-top:4px}.msg .prog>i{display:block;height:100%;background:var(--a);width:0}
+  .composer{display:flex;gap:6px;margin-top:8px;align-items:center}
+  .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .badge{display:inline-block;font-size:10.5px;font-family:var(--mono);color:var(--a);border:1px solid var(--a2);border-radius:20px;padding:1px 9px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- ===== SETUP / KONTAKTE ===== -->
+  <div id="setupScreen">
+    <img class="brand-logo" src="brand/logo.png" alt="SelfMessenger" />
+    <p class="sub intro">Serverlos & Ende-zu-Ende-verschlüsselt. Freunde nur persönlich verbinden (QR/NFC) — danach findet ihr euch verschlüsselt wieder.</p>
+
+    <div class="card">
+      <h2>Meine Identität</h2>
+      <p class="me-line" id="meLine">…</p>
+      <div class="row"><input type="text" id="nameInput" placeholder="Dein Name" /><button id="saveName" class="ghost">Speichern</button></div>
+      <div class="qr">
+        <div class="box"><div id="qr"></div></div>
+        <div style="flex:1">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Dein Pairing-Code (zeig ihn dem Freund):</div>
+          <textarea id="myCode" readonly rows="3"></textarea>
+          <button id="copyCode" class="ghost" style="margin-top:6px;height:34px">Code kopieren</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Freund hinzufügen (persönlich)</h2>
+      <textarea id="addCode" placeholder="Pairing-Code des Freundes hier einfügen (per QR-Scan / NFC / Kopieren)"></textarea>
+      <button id="addBtn" style="margin-top:8px">Als Freund speichern</button>
+    </div>
+
+    <div class="card">
+      <h2>Kontakte</h2>
+      <div id="contacts"><div class="empty">Noch keine Freunde. Tauscht eure Codes persönlich aus.</div></div>
+    </div>
+
+    <p class="legal-footer">
+      <a href="/impressum">Impressum</a> · <a href="/datenschutz">Datenschutz</a>
+    </p>
+  </div>
+
+  <!-- ===== CHAT ===== -->
+  <div id="chatScreen">
+    <div class="top">
+      <button class="ghost" id="back" style="height:34px">← Kontakte</button>
+      <h1 style="font-size:16px;margin:0" id="peerName">Chat</h1>
+      <span class="badge" id="me">Gerät</span>
+    </div>
+    <div class="card">
+      <p class="status" id="status">…</p>
+      <div class="safety" id="safety"></div>
+      <div class="call" id="callPanel">
+        <div class="videos"><video id="localVideo" autoplay muted playsinline></video><video id="remoteVideo" autoplay playsinline></video></div>
+        <div class="callbar"><span class="st" id="callState">Anruf</span><button class="icon rec" id="hangup">⏹ Auflegen</button></div>
+      </div>
+      <div class="log" id="log"></div>
+      <div class="composer">
+        <button class="icon" id="attach" title="Bild/Datei" disabled>📎</button>
+        <button class="icon" id="recBtn" title="Sprachnachricht" disabled>🎤</button>
+        <button class="icon" id="callAudio" title="Anrufen" disabled>📞</button>
+        <button class="icon" id="callVideo" title="Videoanruf" disabled>📹</button>
+        <input type="text" id="in" placeholder="Nachricht…" disabled />
+        <button id="send" disabled>➤</button>
+      </div>
+      <input type="file" id="file" style="display:none" />
+    </div>
+  </div>
+</div>
+<script>
+const enc=new TextEncoder(),dec=new TextDecoder();
+const b64=b=>{let s='',a=new Uint8Array(b);for(let i=0;i<a.length;i++)s+=String.fromCharCode(a[i]);return btoa(s);};
+const fromB64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+const hex=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
+const utf8b64=s=>btoa(unescape(encodeURIComponent(s)));
+const b64utf8=s=>decodeURIComponent(escape(atob(s)));
+const $=id=>document.getElementById(id);
+const setStatus=(t,c='')=>{$('status').textContent=t;$('status').className='status '+c;};
+async function sha(bytes){return hex(await crypto.subtle.digest('SHA-256',bytes));}
+const PROFILE=new URL(location).searchParams.get('me')||'default';
+
+// ===== Identität (persistent, pro Profil in localStorage) =====
+let identity=null;
+async function loadOrCreateIdentity(){
+  const K='sm_identity_'+PROFILE;
+  let o=JSON.parse(localStorage.getItem(K)||'null');
+  if(!o){
+    const kp=await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'},true,['deriveKey']);
+    const pubRaw=new Uint8Array(await crypto.subtle.exportKey('raw',kp.publicKey));
+    const jwk=await crypto.subtle.exportKey('jwk',kp.privateKey);
+    o={name:PROFILE==='default'?'Ich':PROFILE,pub:b64(pubRaw),priv:jwk};
+    localStorage.setItem(K,JSON.stringify(o));
+  }
+  const priv=await crypto.subtle.importKey('jwk',o.priv,{name:'ECDH',namedCurve:'P-256'},false,['deriveKey']);
+  identity={name:o.name,priv,pubB64:o.pub,pubRaw:fromB64(o.pub),jwk:o.priv};
+}
+function setName(n){ identity.name=n||identity.name;
+  localStorage.setItem('sm_identity_'+PROFILE,JSON.stringify({name:identity.name,pub:identity.pubB64,priv:identity.jwk})); }
+function myPayload(){ return utf8b64(JSON.stringify({n:identity.name,k:identity.pubB64})); }
+function decodePayload(s){ try{ const o=JSON.parse(b64utf8(s.trim())); if(o.k&&o.n) return o; }catch(_){} return null; }
+async function fpOf(pubB64){ const d=await crypto.subtle.digest('SHA-256',fromB64(pubB64)); return hex(d).slice(0,12).match(/.{1,4}/g).join(' '); }
+
+// ===== Kontakte =====
+function loadContacts(){ return JSON.parse(localStorage.getItem('sm_contacts_'+PROFILE)||'[]'); }
+function saveContacts(cs){ localStorage.setItem('sm_contacts_'+PROFILE,JSON.stringify(cs)); }
+function addContactFromCode(code){ const o=decodePayload(code); if(!o){ alert('Ungültiger Pairing-Code'); return false; }
+  if(o.k===identity.pubB64){ alert('Das ist dein eigener Code.'); return false; }
+  let cs=loadContacts(); if(!cs.find(c=>c.k===o.k)){ cs.push({n:o.n,k:o.k}); saveContacts(cs); }
+  renderContacts(); return true; }
+async function renderContacts(){
+  const cs=loadContacts(), el=$('contacts');
+  if(!cs.length){ el.innerHTML='<div class="empty">Noch keine Freunde. Tauscht eure Codes persönlich aus.</div>'; return; }
+  el.innerHTML='';
+  for(const c of cs){ const fp=await fpOf(c.k);
+    const row=document.createElement('div'); row.className='contact';
+    row.innerHTML='<div class="info">'+c.n.replace(/</g,'&lt;')+'<div class="fp">🔑 '+fp+'</div></div>';
+    const btn=document.createElement('button'); btn.textContent='Verbinden'; btn.onclick=()=>connectToContact(c);
+    row.appendChild(btn); el.appendChild(row); }
+}
+
+// ===== Rendezvous + Session aus Identitäten (MITM-sicher) =====
+async function rendezvous(aB64,bB64){ const s=[aB64,bB64].sort().join('|');
+  const d=await crypto.subtle.digest('SHA-256',enc.encode('selfmsg-rv|'+s)); return hex(d).slice(0,32); }
+async function deriveSessionWith(contactPubB64){
+  const peerPub=await crypto.subtle.importKey('raw',fromB64(contactPubB64),{name:'ECDH',namedCurve:'P-256'},false,[]);
+  return crypto.subtle.deriveKey({name:'ECDH',public:peerPub},identity.priv,{name:'AES-GCM',length:256},false,['encrypt','decrypt']); }
+// Offline-Zustellung: Briefkasten-ID aus Pubkey; AES mit gegebenem Schlüssel (statische Identitäts-Schicht)
+async function mailboxId(pubB64){ const d=await crypto.subtle.digest('SHA-256',enc.encode('selfmsg-mbx|'+pubB64)); return hex(d).slice(0,32); }
+async function aesEncWith(key,bytes){ const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,bytes); return {iv:b64(iv),ct:b64(ct)}; }
+async function aesDecWith(key,iv,ct){ return new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:fromB64(iv)},key,fromB64(ct))); }
+async function safetyNumber(p1,p2){ const[a,b]=[b64(p1),b64(p2)].sort();
+  const d=await crypto.subtle.digest('SHA-256',enc.encode(a+b)); return hex(d).slice(0,20).match(/.{1,4}/g).join(' '); }
+async function encBytes(bytes){ const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},session,bytes); return{iv:b64(iv),ct:b64(ct)}; }
+async function decBytes(iv,ct){ return new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:fromB64(iv)},session,fromB64(ct))); }
+
+// ===== Verbindung (Signaling + WebRTC, Perfect Negotiation) =====
+// Kuppler-Adresse: standardmäßig gleiche Herkunft (Worker liefert die App mit aus).
+// Alternativ per ?sig=wss://<worker>/ws überschreiben (wenn App getrennt gehostet wird).
+const SIG_BASE = new URL(location).searchParams.get('sig')
+  || `${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`;
+let ws,pc,dc,session=null,currentContact=null,polite=false,makingOffer=false,ignoreOffer=false;
+let iAmInitiator=false, selfAcct=null, ratchet=null, ratchetReady=false, olmReady=false;
+window.__rendezvous=null;
+function wsSend(o){ws.send(JSON.stringify(o));}
+async function connectToContact(c){
+  currentContact=c; session=null; window.__remoteKinds=[];
+  const room=await rendezvous(identity.pubB64,c.k); window.__rendezvous=room;
+  $('setupScreen').style.display='none'; $('chatScreen').style.display='block';
+  $('peerName').textContent=c.n; $('log').innerHTML='';
+  connect(room);
+}
+function connect(room){
+  setStatus('verbinde mit Kuppler…','wait');
+  ws=new WebSocket(`${SIG_BASE}?room=${encodeURIComponent(room)}`);
+  ws.onopen=()=>setStatus('warte auf '+currentContact.n+'…','wait');
+  ws.onclose=()=>{ if(session) return; };
+  ws.onmessage=async e=>{const m=JSON.parse(e.data);
+    if(m.type==='ready'){ iAmInitiator=m.initiator; polite=!m.initiator; $('me').textContent=m.initiator?'A (ruft an)':'B'; await setupPC(m.initiator); }
+    else if(m.type==='desc'){ const desc=m.desc, coll=desc.type==='offer'&&(makingOffer||pc.signalingState!=='stable');
+      ignoreOffer=!polite&&coll; if(ignoreOffer) return; await pc.setRemoteDescription(desc);
+      if(desc.type==='offer'){ await pc.setLocalDescription(); wsSend({type:'desc',desc:pc.localDescription}); } }
+    else if(m.type==='ice'){ try{ await pc.addIceCandidate(m.cand); }catch(err){ if(!ignoreOffer) console.error(err); } }
+    else if(m.type==='full'){ setStatus('Raum voll','bad'); }
+    else if(m.type==='peer-left'){ setStatus(currentContact.n+' hat getrennt','bad'); }
+  };
+}
+async function setupPC(initiator){
+  pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+  pc.onicecandidate=e=>{ if(e.candidate) wsSend({type:'ice',cand:e.candidate}); };
+  pc.onnegotiationneeded=async()=>{ try{ makingOffer=true; await pc.setLocalDescription();
+    wsSend({type:'desc',desc:pc.localDescription}); }catch(err){ console.error('nn',err); }finally{ makingOffer=false; } };
+  pc.ontrack=onRemoteTrack;
+  pc.onconnectionstatechange=()=>{ if(['failed','disconnected'].includes(pc.connectionState)) setStatus('WebRTC: '+pc.connectionState,'bad'); };
+  pc.ondatachannel=e=>{ dc=e.channel; dc.binaryType='arraybuffer'; wireDC(); };
+  if(initiator){ dc=pc.createDataChannel('chat'); dc.binaryType='arraybuffer'; wireDC(); }
+}
+function wireDC(){ dc.onopen=async()=>{ setStatus('✓ direkt verbunden (P2P über WebRTC)','ok'); await finishSecure(); };
+  dc.onmessage=async e=>{ await handleDC(JSON.parse(e.data)); }; }
+async function finishSecure(){
+  if(session) return;
+  session=await deriveSessionWith(currentContact.k); window.session=session;
+  window.__sn=await safetyNumber(identity.pubRaw,fromB64(currentContact.k));
+  $('safety').style.display='block';
+  $('safety').innerHTML='Sicherheitsnummer <b>'+window.__sn+'</b> — persönlich getauscht · richte Double Ratchet ein…';
+  setStatus('sichere Verbindung, starte Double Ratchet…','wait');
+  await startRatchet();
+}
+// Ratchet-Handshake läuft AES-verpackt über den identitäts-verschlüsselten Kanal -> MITM-sicher authentifiziert
+async function aesWrap(obj){ const {iv,ct}=await encBytes(enc.encode(JSON.stringify(obj))); return {t:'hs',iv,ct}; }
+async function aesUnwrap(m){ return JSON.parse(dec.decode(await decBytes(m.iv,m.ct))); }
+async function startRatchet(){
+  while(!olmReady) await new Promise(r=>setTimeout(r,50));
+  selfAcct=new Olm.Account(); selfAcct.create();
+  if(!iAmInitiator){                                  // Responder veröffentlicht olm-Schlüssel
+    selfAcct.generate_one_time_keys(1);
+    const id=JSON.parse(selfAcct.identity_keys()).curve25519;
+    const otk=Object.values(JSON.parse(selfAcct.one_time_keys()).curve25519)[0];
+    selfAcct.mark_keys_as_published();
+    dc.send(JSON.stringify(await aesWrap({k:'olm-keys',id,otk})));
+  }
+}
+async function handleHandshake(h){
+  if(h.k==='olm-keys'){                               // Initiator: Outbound-Session + Pre-Key-Hello
+    ratchet=new Olm.Session(); ratchet.create_outbound(selfAcct,h.id,h.otk);
+    const e=ratchet.encrypt('__hello__');
+    dc.send(JSON.stringify(await aesWrap({k:'olm-pre',ty:e.type,body:e.body})));
+    enableChatRatchet();
+  } else if(h.k==='olm-pre'){                         // Responder: Inbound-Session
+    ratchet=new Olm.Session(); ratchet.create_inbound(selfAcct,h.body);
+    selfAcct.remove_one_time_keys(ratchet); ratchet.decrypt(h.ty,h.body);
+    enableChatRatchet();
+  }
+}
+function enableChatRatchet(){
+  ratchetReady=true; window.ratchetReady=true;
+  $('safety').innerHTML='Sicherheitsnummer <b>'+window.__sn+'</b> · 🔒 Double Ratchet aktiv (libolm)';
+  ['in','send','attach','recBtn','callAudio','callVideo'].forEach(i=>$(i).disabled=false);
+  setStatus('✓ Ende-zu-Ende · Double Ratchet · '+currentContact.n,'ok');
+}
+
+// ===== Anrufe =====
+let localStream=null,remoteStream=null; window.__remoteKinds=[]; window.__localCallKinds=[];
+function onRemoteTrack(e){ if(!remoteStream){ remoteStream=new MediaStream(); $('remoteVideo').srcObject=remoteStream; }
+  remoteStream.addTrack(e.track); if(!window.__remoteKinds.includes(e.track.kind)) window.__remoteKinds.push(e.track.kind);
+  showCall('Anruf verbunden'); addSys('📞 '+e.track.kind+'-Spur empfangen (DTLS-SRTP)'); }
+function showCall(s){ $('callPanel').style.display='flex'; $('callState').textContent=s; }
+async function startCall(video){ let st; try{ st=await navigator.mediaDevices.getUserMedia({audio:true,video}); }
+  catch(err){ setStatus('Kamera/Mikro nicht verfügbar: '+err.message,'bad'); return; } attachLocal(st,video,video?'Videoanruf…':'Anruf…'); }
+function attachLocal(st,video,label){ localStream=st; $('localVideo').srcObject=st;
+  for(const t of st.getTracks()) pc.addTrack(t,st); window.__localCallKinds=st.getTracks().map(t=>t.kind);
+  showCall(label); addSys('📞 Anruf gestartet: '+window.__localCallKinds.join('+')); }
+function hangup(){ if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
+  if(window.__synTimer){ clearInterval(window.__synTimer); window.__synTimer=null; }
+  pc&&pc.getSenders().forEach(s=>{ if(s.track){ try{ pc.removeTrack(s); }catch(_){} } });
+  $('callPanel').style.display='none'; addSys('📞 Anruf beendet'); }
+window.__startSyntheticCall=(video)=>{ const tracks=[]; const AC=window.AudioContext||window.webkitAudioContext;
+  const ac=new AC(); const dst=ac.createMediaStreamDestination(); const osc=ac.createOscillator(); osc.frequency.value=440; osc.connect(dst); osc.start();
+  tracks.push(dst.stream.getAudioTracks()[0]);
+  if(video){ const c=document.createElement('canvas'); c.width=160;c.height=120; const ctx=c.getContext('2d');
+    window.__synTimer=setInterval(()=>{ctx.fillStyle='#'+((Math.random()*0xffffff)|0).toString(16).padStart(6,'0');ctx.fillRect(0,0,160,120);},100);
+    tracks.push(c.captureStream(10).getVideoTracks()[0]); }
+  const st=new MediaStream(tracks); attachLocal(st,video,'Test-Anruf…'); return window.__localCallKinds; };
+
+// ===== Nachrichten + Medien =====
+const incoming=new Map(); window.__lastRecv=null; window.__lastSent=null;
+async function handleDC(m){
+  if(m.t==='hs'){ await handleHandshake(await aesUnwrap(m)); }
+  else if(m.t==='msg'){ addTextBubble('them',ratchet.decrypt(m.ty,m.body),'empfangen · Double Ratchet ✓'); }
+  else if(m.t==='meta'){ incoming.set(m.id,{meta:m,parts:new Array(m.total),got:0,bubble:addMediaBubble('them',m,true)}); }
+  else if(m.t==='chunk'){ const rec=incoming.get(m.id); if(!rec) return; rec.parts[m.i]=fromB64(ratchet.decrypt(m.ty,m.body)); rec.got++;
+    if(rec.bubble) rec.bubble.querySelector('i').style.width=Math.round(rec.got/rec.meta.total*100)+'%';
+    if(rec.got===rec.meta.total){ await assemble(rec); incoming.delete(m.id); } }
+}
+async function assemble(rec){ const total=rec.parts.reduce((n,p)=>n+p.length,0), buf=new Uint8Array(total); let o=0;
+  for(const p of rec.parts){ buf.set(p,o); o+=p.length; } window.__lastRecv={hash:await sha(buf),size:buf.length,name:rec.meta.name};
+  renderMedia(rec.bubble,rec.meta,new Blob([buf],{type:rec.meta.mime})); }
+const CHUNK=16*1024, MAX_BUF=1_000_000;
+async function sendBytes(bytes,kind,name,mime){ const id=(crypto.randomUUID&&crypto.randomUUID())||String(Date.now()+Math.random());
+  const total=Math.max(1,Math.ceil(bytes.length/CHUNK));
+  const meta={t:'meta',id,kind,name:name||'',mime:mime||'application/octet-stream',size:bytes.length,total};
+  dc.send(JSON.stringify(meta)); const bubble=addMediaBubble('self',meta,true);
+  for(let i=0;i<total;i++){ const e=ratchet.encrypt(b64(bytes.subarray(i*CHUNK,(i+1)*CHUNK)));
+    while(dc.bufferedAmount>MAX_BUF) await new Promise(r=>setTimeout(r,20)); dc.send(JSON.stringify({t:'chunk',id,i,ty:e.type,body:e.body}));
+    if(bubble) bubble.querySelector('i').style.width=Math.round((i+1)/total*100)+'%'; }
+  window.__lastSent={hash:await sha(bytes),size:bytes.length,name};
+  renderMedia(bubble,meta,new Blob([bytes],{type:meta.mime})); return window.__lastSent.hash; }
+async function sendFileLike(file,kind){ await sendBytes(new Uint8Array(await file.arrayBuffer()),kind,file.name,file.type); }
+function addTextBubble(who,text,meta){ const d=document.createElement('div'); d.className='msg '+who; d.textContent=text;
+  const s=document.createElement('span'); s.className='m'; s.textContent=meta; d.appendChild(s); $('log').appendChild(d); $('log').scrollTop=$('log').scrollHeight; return d; }
+function addSys(text){ const d=document.createElement('div'); d.className='msg sys'; d.textContent=text; $('log').appendChild(d); $('log').scrollTop=$('log').scrollHeight; }
+function addMediaBubble(who,meta,wp){ const d=document.createElement('div'); d.className='msg '+who; d.dataset.kind=meta.kind;
+  const label={image:'🖼 Bild',voice:'🎤 Sprachnachricht',file:'📎 '+(meta.name||'Datei')}[meta.kind]||'Datei';
+  d.innerHTML='<div class="body">'+label+'</div>'+(wp?'<div class="prog"><i></i></div>':'')+'<span class="m">'+(who==='self'?'senden…':'empfangen…')+' · verschlüsselt</span>';
+  $('log').appendChild(d); $('log').scrollTop=$('log').scrollHeight; return d; }
+function renderMedia(bubble,meta,blob){ if(!bubble) return; const url=URL.createObjectURL(blob);
+  const body=bubble.querySelector('.body'), prog=bubble.querySelector('.prog'); if(prog) prog.remove();
+  if(meta.kind==='image') body.innerHTML='<img src="'+url+'" alt="Bild">';
+  else if(meta.kind==='voice') body.innerHTML='<audio controls src="'+url+'"></audio>';
+  else body.innerHTML='<a class="file" download="'+(meta.name||'datei.bin')+'" href="'+url+'">⬇ '+(meta.name||'Datei')+'</a>';
+  bubble.querySelector('.m').textContent='verschlüsselt ✓'; }
+// ===== Offline-Zustellung (Briefkasten) =====
+let mbxWs=null;
+async function openMailbox(){
+  const mine=await mailboxId(identity.pubB64);
+  mbxWs=new WebSocket(`${SIG_BASE}?mbx=${mine}`);
+  mbxWs.onmessage=async e=>{ const m=JSON.parse(e.data);
+    if(m.type==='mail'){ for(const blob of m.items) await receiveOffline(blob); } };
+}
+async function receiveOffline(blob){
+  for(const c of loadContacts()){                       // Probe-Entschlüsselung: nur der echte Absender passt
+    try{ const key=await deriveSessionWith(c.k); const text=dec.decode(await aesDecWith(key,blob.iv,blob.ct));
+      window.__offline=window.__offline||[]; window.__offline.push({from:c.n,text});
+      if(currentContact&&currentContact.k===c.k) addTextBubble('them',text,'📨 offline zugestellt ✓');
+      return; }catch(_){}
+  }
+}
+async function sendChat(){ const t=$('in').value.trim(); if(!t) return; $('in').value='';
+  if(ratchetReady){                                     // live: Double Ratchet
+    const e=ratchet.encrypt(t); dc.send(JSON.stringify({t:'msg',ty:e.type,body:e.body}));
+    addTextBubble('self',t,'gesendet · Double Ratchet');
+  } else if(currentContact && ws && ws.readyState===1){  // Partner offline: verschlüsselt in den Briefkasten
+    const key=await deriveSessionWith(currentContact.k);
+    const blob=await aesEncWith(key,enc.encode(t));
+    ws.send(JSON.stringify({type:'store',mailbox:await mailboxId(currentContact.k),blob}));
+    addTextBubble('self',t,'✉ offline hinterlegt (wird zugestellt)');
+  }
+}
+let mediaRec=null,recChunks=[];
+async function toggleRec(){ if(mediaRec&&mediaRec.state==='recording'){ mediaRec.stop(); return; }
+  try{ const st=await navigator.mediaDevices.getUserMedia({audio:true}); recChunks=[]; mediaRec=new MediaRecorder(st);
+    mediaRec.ondataavailable=e=>{ if(e.data.size) recChunks.push(e.data); };
+    mediaRec.onstop=async()=>{ st.getTracks().forEach(t=>t.stop()); const blob=new Blob(recChunks,{type:mediaRec.mimeType||'audio/webm'});
+      await sendBytes(new Uint8Array(await blob.arrayBuffer()),'voice','sprachnachricht',blob.type); $('recBtn').classList.remove('rec'); $('recBtn').textContent='🎤'; };
+    mediaRec.start(); $('recBtn').classList.add('rec'); $('recBtn').textContent='⏹';
+  }catch(err){ setStatus('Mikrofon nicht verfügbar: '+err.message,'bad'); } }
+
+// ===== UI-Verdrahtung =====
+function renderIdentity(){ $('meLine').innerHTML='<b>'+identity.name.replace(/</g,'&lt;')+'</b>';
+  $('nameInput').value=identity.name; $('myCode').value=myPayload();
+  const qr=qrcode(0,'M'); qr.addData(myPayload()); qr.make(); $('qr').innerHTML=qr.createImgTag(3,0);
+  fpOf(identity.pubB64).then(fp=>{ $('meLine').innerHTML='<b>'+identity.name.replace(/</g,'&lt;')+'</b> · 🔑 '+fp; }); }
+$('saveName').onclick=()=>{ setName($('nameInput').value.trim()); renderIdentity(); };
+$('copyCode').onclick=()=>{ $('myCode').select(); try{ document.execCommand('copy'); }catch(_){} $('copyCode').textContent='kopiert ✓'; setTimeout(()=>$('copyCode').textContent='Code kopieren',1200); };
+$('addBtn').onclick=()=>{ if(addContactFromCode($('addCode').value)) $('addCode').value=''; };
+$('back').onclick=()=>{ try{ pc&&pc.close(); ws&&ws.close(); }catch(_){} session=null;
+  $('chatScreen').style.display='none'; $('setupScreen').style.display='block'; renderContacts(); };
+$('send').onclick=sendChat; $('in').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat();});
+$('attach').onclick=()=>$('file').click();
+$('file').onchange=e=>{ const f=e.target.files[0]; if(!f) return; sendFileLike(f,f.type.startsWith('image/')?'image':'file'); e.target.value=''; };
+$('recBtn').onclick=toggleRec; $('callAudio').onclick=()=>startCall(false); $('callVideo').onclick=()=>startCall(true); $('hangup').onclick=hangup;
+window.__sendRandom=async(n,kind='image',mime='image/png')=>sendBytes(crypto.getRandomValues(new Uint8Array(n)),kind,'test.png',mime);
+// Test-Hooks
+window.__getPayload=()=>myPayload();
+window.__addContact=(code)=>addContactFromCode(code);
+window.__connectFirst=()=>{ const cs=loadContacts(); if(cs.length) connectToContact(cs[0]); return cs[0]; };
+
+(async()=>{ await loadOrCreateIdentity(); renderIdentity(); await renderContacts();
+  try{ await Olm.init({locateFile:()=>'olm.wasm'}); olmReady=true; }catch(e){ console.error('olm init',e); }
+  try{ await openMailbox(); }catch(e){ console.error('mailbox',e); } })();
+</script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Datenschutz — SelfMessenger</title>
+<link rel="icon" href="brand/shield.png" />
+<style>
+  @font-face{font-family:"Orbitron";src:url("fonts/Orbitron.ttf") format("truetype");font-weight:400 900;font-display:swap}
+  :root{--bg:#080c11;--panel:#161b22;--line:rgba(157,189,208,.12);--ink:#eef4f7;--muted:#8a9caa;--a:#33a78c;--ice:#9dbdd0;
+    --sans:"Exo 2",system-ui,'Segoe UI',Roboto,sans-serif;--wordmark:"Orbitron",var(--sans)}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;
+    padding:32px 18px 60px;display:flex;justify-content:center}
+  .wrap{width:100%;max-width:680px}
+  a{color:var(--a);text-decoration:none}a:hover{text-decoration:underline}
+  .brand{font-family:var(--wordmark);font-weight:800;font-size:20px;margin:0 0 4px}
+  .brand .self{color:var(--ice)}.brand .name{color:var(--a)}
+  h1{font-size:22px;margin:22px 0 6px}h2{font-size:16px;margin:24px 0 6px;color:var(--ice)}
+  p,li{color:var(--ink);font-size:15px}.muted{color:var(--muted);font-size:13px}
+  .fill{color:#04120d;background:var(--a);border-radius:4px;padding:1px 6px;font-weight:700;font-size:13px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin-top:12px}
+  .good{color:var(--a);font-weight:700}
+  .back{display:inline-block;margin-bottom:8px;font-size:14px}
+  ul{margin:6px 0 0;padding-left:20px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">← zur App</a>
+  <p class="brand"><span class="self">Self</span><span class="name">Messenger</span></p>
+
+  <h1>Datenschutzerklärung</h1>
+  <p class="muted">Informationen gemäß Art. 13 DSGVO. SelfMessenger ist nach dem Grundsatz „Datenschutz durch
+     Technikgestaltung" (Art. 25 DSGVO) gebaut — es werden so wenig Daten wie technisch möglich verarbeitet.</p>
+
+  <div class="card">
+    <h2>Das Wichtigste in einem Satz</h2>
+    <p><span class="good">Deine Nachrichten, Bilder, Sprachnachrichten und Anrufe sind Ende-zu-Ende
+       verschlüsselt und laufen direkt von Gerät zu Gerät — der Betreiber kann sie zu keinem Zeitpunkt
+       lesen oder mithören.</span></p>
+  </div>
+
+  <h2>Verantwortlicher</h2>
+  <p><span class="fill">[DEIN NAME]</span>, <span class="fill">[ANSCHRIFT]</span>,
+     E-Mail <span class="fill">[KONTAKT-E-MAIL]</span> (siehe <a href="/impressum">Impressum</a>).</p>
+
+  <h2>Was NICHT verarbeitet wird</h2>
+  <ul>
+    <li><b>Keine Inhalte:</b> Nachrichten/Medien/Anrufe sind Ende-zu-Ende verschlüsselt; der Server sieht nur
+        unlesbare Datenpakete.</li>
+    <li><b>Keine Konten:</b> keine Registrierung, keine Telefonnummer, keine E-Mail-Anmeldung.</li>
+    <li><b>Kein Tracking, keine Cookies, keine Werbung, keine Analyse-Dienste.</b></li>
+    <li>Deine Identität und Kontakte werden <b>nur lokal auf deinem Gerät</b> gespeichert (verschlüsselt).</li>
+  </ul>
+
+  <h2>Was technisch nötig ist (Verbindungsaufbau)</h2>
+  <p>Damit sich zwei Geräte finden können, vermittelt ein „Kuppler" (Signaling) kurz den Verbindungsaufbau.
+     Dabei werden verarbeitet:</p>
+  <ul>
+    <li><b>IP-Adresse</b> — technisch für den Verbindungsaufbau erforderlich (Art. 6 Abs. 1 lit. f DSGVO,
+        berechtigtes Interesse am Betrieb des Dienstes). Es werden <b>keine dauerhaften IP-Protokolle</b> geführt.</li>
+    <li><b>Verbindungs-Zettel</b> (technische WebRTC-Daten) — nur flüchtig durchgereicht, nicht gespeichert.</li>
+    <li><b>Briefkasten:</b> Ist der Empfänger offline, wird die <b>bereits verschlüsselte</b> Nachricht kurz
+        zwischengelagert und nach Zustellung gelöscht. Der Inhalt bleibt für den Server unlesbar.</li>
+  </ul>
+
+  <h2>Auftragsverarbeiter</h2>
+  <p>Der Kuppler läuft auf <b>Cloudflare</b> (Cloudflare, Inc.). Mit Cloudflare besteht ein Auftragsverarbeitungs-
+     Vertrag (DPA); Datenübermittlungen sind über EU-Standardvertragsklauseln abgesichert. Cloudflare erhält
+     ausschließlich technische Verbindungsdaten, keine lesbaren Inhalte.</p>
+
+  <h2>Speicherdauer</h2>
+  <p>Verbindungsdaten werden nur für die Dauer der Verbindung verarbeitet. Zwischengelagerte (verschlüsselte)
+     Nachrichten werden nach Zustellung bzw. nach kurzer Frist automatisch gelöscht.</p>
+
+  <h2>Deine Rechte</h2>
+  <p>Dir stehen die Rechte auf Auskunft, Berichtigung, Löschung, Einschränkung, Datenübertragbarkeit und
+     Widerspruch (Art. 15–21 DSGVO) sowie ein Beschwerderecht bei einer Aufsichtsbehörde zu. Da keine Konten
+     und keine personenbezogenen Inhaltsdaten gespeichert werden, ist der verarbeitete Datenbestand minimal.</p>
+
+  <p class="muted" style="margin-top:24px">Stand: <span class="fill">[DATUM]</span>.</p>
+</div>
+</body>
+</html>

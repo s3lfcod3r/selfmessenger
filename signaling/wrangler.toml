@@ -1,0 +1,21 @@
+name = "selfmessenger-signaling"
+main = "worker.js"
+compatibility_date = "2024-09-01"
+
+# Der Worker liefert zusätzlich die Web-App aus (web/) — eine URL für App + Signaling.
+[assets]
+directory = "../web"
+
+# Durable Objects: Verbindungs-Räume (Rendezvous) + Briefkästen (Offline-Zustellung)
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+[[durable_objects.bindings]]
+name = "MAILBOX"
+class_name = "Mailbox"
+
+# SQLite-Speicher = gratis-tauglich (Free-Plan-Durable-Objects). Frischer Deploy, keine Migration von Altdaten.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room", "Mailbox"]

@@ -1,0 +1,6 @@
+{
+  "name": "sm-dev",
+  "type": "module",
+  "private": true,
+  "dependencies": { "ws": "^8.18.0" }
+}

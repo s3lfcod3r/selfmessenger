@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SelfMessenger — Phase 1 Spike</title>
+<style>
+  :root{
+    --bg:#0a0e14; --panel:#111823; --panel2:#0d141d; --line:#1e2a3a;
+    --ink:#e6edf5; --muted:#7d8da0;
+    --a:#25d0a5; --a2:#1b9c7c; --b:#5b8cff; --warn:#f2b544; --bad:#ff5c72;
+    --mono:'SF Mono',ui-monospace,'Cascadia Code',Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#12203010,transparent),var(--bg);
+    color:var(--ink);font-family:var(--sans);min-height:100vh;padding:28px 20px 60px}
+  header{max-width:980px;margin:0 auto 22px}
+  h1{font-size:22px;margin:0 0 4px;letter-spacing:-.02em}
+  h1 span{color:var(--a)}
+  .sub{color:var(--muted);font-size:13.5px;line-height:1.5;margin:0}
+  .pill{display:inline-block;font-size:11px;font-family:var(--mono);color:var(--a);
+    border:1px solid var(--a2);border-radius:20px;padding:2px 10px;margin-top:10px}
+  .stage{max-width:980px;margin:0 auto;display:grid;grid-template-columns:1fr 64px 1fr;gap:0;align-items:stretch}
+  .phone{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
+    border-radius:18px;padding:16px;display:flex;flex-direction:column;min-height:440px}
+  .phone h2{font-size:14px;margin:0 0 2px;display:flex;align-items:center;gap:8px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--muted)}
+  .phone.a .dot{background:var(--a)} .phone.b .dot{background:var(--b)}
+  .who{font-size:11px;color:var(--muted);font-family:var(--mono);margin:0 0 12px;word-break:break-all}
+  .mid{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+  .mid .wire{writing-mode:vertical-rl;font-size:10px;color:var(--muted);font-family:var(--mono);letter-spacing:.1em}
+  .btn{appearance:none;border:1px solid var(--a2);background:#0e1b18;color:var(--a);font-weight:600;
+    font-size:13px;padding:10px 12px;border-radius:11px;cursor:pointer;transition:.15s;font-family:var(--sans)}
+  .btn:hover{background:#12241f;transform:translateY(-1px)}
+  .btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+  .btn.tap{width:100%;margin-bottom:12px}
+  .status{font-size:12px;color:var(--muted);margin:0 0 12px;min-height:16px}
+  .status.ok{color:var(--a)} .status.wait{color:var(--warn)}
+  .safety{font-family:var(--mono);font-size:12px;background:#0c1620;border:1px solid var(--line);
+    border-radius:10px;padding:8px 10px;margin:0 0 12px;color:var(--muted);letter-spacing:.06em}
+  .safety b{color:var(--ink);font-weight:600}
+  .log{flex:1;overflow:auto;display:flex;flex-direction:column;gap:7px;padding:4px 2px 10px}
+  .msg{max-width:85%;padding:8px 11px;border-radius:13px;font-size:13px;line-height:1.35;word-wrap:break-word}
+  .msg.self{align-self:flex-end;background:#173a31;border:1px solid #245a4a;border-bottom-right-radius:4px}
+  .msg.them{align-self:flex-start;background:#141d2a;border:1px solid var(--line);border-bottom-left-radius:4px}
+  .msg .m{opacity:.55;font-size:10px;font-family:var(--mono);display:block;margin-top:3px}
+  .composer{display:flex;gap:8px;margin-top:8px}
+  .composer input{flex:1;background:#0c1620;border:1px solid var(--line);border-radius:11px;
+    padding:10px 12px;color:var(--ink);font-size:13px;font-family:var(--sans)}
+  .composer input:focus{outline:none;border-color:var(--a2)}
+  .composer button{border:none;background:var(--a);color:#04120d;font-weight:700;border-radius:11px;
+    padding:0 14px;cursor:pointer;font-size:13px}
+  .composer button:disabled{opacity:.35;cursor:not-allowed}
+  .server{max-width:980px;margin:26px auto 0;background:#0c1017;border:1px dashed #2a3547;
+    border-radius:14px;padding:14px 16px}
+  .server h3{margin:0 0 3px;font-size:13px;color:var(--warn)}
+  .server p{margin:0 0 10px;font-size:12px;color:var(--muted)}
+  .server .feed{font-family:var(--mono);font-size:11px;color:#54637a;max-height:120px;overflow:auto;
+    display:flex;flex-direction:column;gap:4px}
+  .server .feed .row{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .server .feed .row b{color:var(--bad);font-weight:400}
+  @media(max-width:720px){.stage{grid-template-columns:1fr;gap:14px}
+    .mid{flex-direction:row}.mid .wire{writing-mode:horizontal-tb}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Self<span>Messenger</span> — Phase&nbsp;1 Prototyp</h1>
+  <p class="sub">Zwei Geräte verbinden sich „von Angesicht zu Angesicht" (hier per Knopf statt NFC) und tauschen dabei
+  ihre Schlüssel direkt aus. Danach ist jede Nachricht Ende-zu-Ende verschlüsselt — der Server sieht nur Datensalat.</p>
+  <span class="pill" id="cryptoline">Krypto: wird geladen…</span>
+</header>
+
+<div class="stage">
+  <section class="phone a" id="phoneA">
+    <h2><span class="dot"></span>Handy A · Anna</h2>
+    <p class="who" id="whoA">Schlüssel wird erzeugt…</p>
+    <button class="btn tap" id="tapA" disabled>📲 An Handy B tippen (NFC)</button>
+    <p class="status" id="statusA">Nicht verbunden</p>
+    <div class="safety" id="safetyA" style="display:none"></div>
+    <div class="log" id="logA"></div>
+    <div class="composer">
+      <input id="inA" placeholder="Nachricht an Ben…" disabled />
+      <button id="sendA" disabled>➤</button>
+    </div>
+  </section>
+
+  <div class="mid">
+    <button class="btn" id="reset" title="Zurücksetzen">↺</button>
+    <span class="wire">◄ direkt · P2P ►</span>
+  </div>
+
+  <section class="phone b" id="phoneB">
+    <h2><span class="dot"></span>Handy B · Ben</h2>
+    <p class="who" id="whoB">Schlüssel wird erzeugt…</p>
+    <button class="btn tap" id="tapB" disabled>📲 An Handy A tippen (NFC)</button>
+    <p class="status" id="statusB">Nicht verbunden</p>
+    <div class="safety" id="safetyB" style="display:none"></div>
+    <div class="log" id="logB"></div>
+    <div class="composer">
+      <input id="inB" placeholder="Nachricht an Anna…" disabled />
+      <button id="sendB" disabled>➤</button>
+    </div>
+  </section>
+</div>
+
+<div class="server">
+  <h3>⚠ Was ein Server / Lauscher sehen würde</h3>
+  <p>So sähe die Leitung aus, wenn jemand mitschneidet. Ohne den Schlüssel: unlesbar.</p>
+  <div class="feed" id="serverFeed"><div class="row" style="color:#3a4658">— noch nichts übertragen —</div></div>
+</div>
+
+<script>
+const enc = new TextEncoder(), dec = new TextDecoder();
+const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const hex = buf => [...new Uint8Array(buf)].map(x=>x.toString(16).padStart(2,'0')).join('');
+
+// Ein "Gerät": ECDH-Schlüsselpaar (P-256). Der private Schlüssel verlässt das Gerät NIE.
+async function makeDevice(name){
+  const kp = await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'},true,['deriveKey']);
+  const pubRaw = await crypto.subtle.exportKey('raw', kp.publicKey);
+  return {name, kp, pubRaw, session:null, peer:null};
+}
+// "NFC-Tap": öffentliche Schlüssel direkt austauschen -> gemeinsamen AES-Schlüssel ableiten (HKDF)
+async function deriveSession(self, peerPubRaw){
+  const peerPub = await crypto.subtle.importKey('raw', peerPubRaw, {name:'ECDH',namedCurve:'P-256'}, false, []);
+  const shared = await crypto.subtle.deriveKey(
+    {name:'ECDH', public:peerPub}, self.kp.privateKey,
+    {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']);
+  return shared;
+}
+// Sicherheitsnummer = Fingerabdruck beider öffentlicher Schlüssel (muss auf beiden Geräten gleich sein)
+async function safetyNumber(p1, p2){
+  const [a,b] = [b64(p1), b64(p2)].sort();
+  const d = await crypto.subtle.digest('SHA-256', enc.encode(a+b));
+  const h = hex(d).slice(0,20);
+  return h.match(/.{1,4}/g).join(' ');
+}
+async function encryptMsg(key, text){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, enc.encode(text));
+  return {iv:b64(iv), ct:b64(ct)};
+}
+async function decryptMsg(key, iv, ct){
+  const ivb = Uint8Array.from(atob(iv), c=>c.charCodeAt(0));
+  const ctb = Uint8Array.from(atob(ct), c=>c.charCodeAt(0));
+  const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv:ivb}, key, ctb);
+  return dec.decode(pt);
+}
+
+let A, B;
+const $ = id => document.getElementById(id);
+function serverRow(html){
+  const feed = $('serverFeed');
+  if(feed.firstChild && feed.firstChild.style.color) feed.innerHTML='';
+  const row = document.createElement('div'); row.className='row'; row.innerHTML=html;
+  feed.appendChild(row); feed.scrollTop = feed.scrollHeight;
+}
+function addMsg(logId, who, text, meta){
+  const d = document.createElement('div'); d.className='msg '+who;
+  d.innerHTML = text.replace(/</g,'&lt;') + '<span class="m">'+meta+'</span>';
+  $(logId).appendChild(d); $(logId).scrollTop = $(logId).scrollHeight;
+}
+
+async function init(){
+  try{
+    A = await makeDevice('Anna'); B = await makeDevice('Ben');
+    $('cryptoline').textContent = 'Krypto: ECDH P-256 · HKDF · AES-256-GCM (Web Crypto, echt)';
+    $('whoA').textContent = 'Öffentl. Schlüssel: ' + b64(A.pubRaw).slice(0,32) + '…';
+    $('whoB').textContent = 'Öffentl. Schlüssel: ' + b64(B.pubRaw).slice(0,32) + '…';
+    ['tapA','tapB'].forEach(i=>$(i).disabled=false);
+  }catch(e){
+    $('cryptoline').textContent = 'Fehler: '+e.message; $('cryptoline').style.color='var(--bad)';
+  }
+}
+
+async function pair(){
+  $('statusA').textContent='verbinde…'; $('statusA').className='status wait';
+  $('statusB').textContent='verbinde…'; $('statusB').className='status wait';
+  A.session = await deriveSession(A, B.pubRaw);
+  B.session = await deriveSession(B, A.pubRaw);
+  const sn = await safetyNumber(A.pubRaw, B.pubRaw);
+  for(const [s,side] of [['A',A],['B',B]]){
+    $('status'+s).textContent='✓ verbunden & verifiziert'; $('status'+s).className='status ok';
+    $('tap'+s).disabled=true; $('in'+s).disabled=false; $('send'+s).disabled=false;
+    const box=$('safety'+s); box.style.display='block';
+    box.innerHTML='Sicherheitsnummer <b>'+sn+'</b> — identisch → kein Mithörer dazwischen';
+  }
+  serverRow('handshake: pubkey ↔ pubkey ausgetauscht (nur öffentliche Schlüssel)');
+}
+
+async function send(fromKey){
+  const from = fromKey==='A'?A:B, to = fromKey==='A'?B:A;
+  const toKey = fromKey==='A'?'B':'A';
+  const text = $('in'+fromKey).value.trim(); if(!text || !from.session) return;
+  $('in'+fromKey).value='';
+  const {iv, ct} = await encryptMsg(from.session, text);
+  addMsg('log'+fromKey,'self',text,'gesendet · verschlüsselt');
+  serverRow('A→B ciphertext: <b>'+ct.slice(0,44)+'…</b> (unlesbar ohne Schlüssel)');
+  const plain = await decryptMsg(to.session, iv, ct);   // Gegenseite entschlüsselt
+  addMsg('log'+toKey,'them',plain,'empfangen · entschlüsselt ✓');
+}
+
+$('tapA').onclick = pair; $('tapB').onclick = pair;
+$('sendA').onclick = ()=>send('A'); $('sendB').onclick = ()=>send('B');
+$('inA').addEventListener('keydown',e=>{if(e.key==='Enter')send('A')});
+$('inB').addEventListener('keydown',e=>{if(e.key==='Enter')send('B')});
+$('reset').onclick = ()=>location.reload();
+init();
+</script>
+</body>
+</html>

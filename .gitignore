@@ -1,0 +1,18 @@
+# Builds / Caches
+android/app/build/
+android/.gradle/
+android/.kotlin/
+**/build/
+**/.gradle/
+**/.wrangler/
+node_modules/
+__pycache__/
+# Maschinen-spezifisch
+android/local.properties
+*.log
+# Secrets / Keys NIEMALS committen
+*.jks
+*.keystore
+keystore.properties
+.env
+.dev.vars
