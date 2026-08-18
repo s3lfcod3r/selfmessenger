@@ -179,6 +179,20 @@
   .call-btn.accept:hover{background:#38df78}
   .call-btn.end{background:#e5484d;transform:rotate(135deg)}
   .call-btn.end:hover{background:#f2585d}
+  /* Einstellungen + Kontakt-Menü */
+  .set-section{color:#33a78c;font-size:.74rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin:1.1rem 0 .3rem}
+  .set-row{display:flex;align-items:center;gap:.8rem;padding:.7rem 0;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer}
+  .set-row span{flex:1;display:flex;flex-direction:column;color:#eef4f7;font-size:.95rem}
+  .set-row span small{color:#8a9caa;font-size:.78rem;font-weight:400;margin-top:2px}
+  .switch{appearance:none;-webkit-appearance:none;width:44px;height:26px;border-radius:14px;background:#2a323b;position:relative;cursor:pointer;flex:none;transition:background .18s}
+  .switch:checked{background:#33a78c}
+  .switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#eef4f7;transition:left .18s}
+  .switch:checked::after{left:21px;background:#04120d}
+  .modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .modal-box{background:#161b22;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:18px;width:100%;max-width:360px}
+  .modal-box h3{margin:0 0 .1rem;color:#eef4f7;font-size:1.1rem}
+  .modal-actions{display:flex;justify-content:flex-end;gap:.5rem;margin-top:.8rem}
+  .btn-ghost.block{display:block;width:100%;text-align:left}
 </style>
 </head>
 <body>
@@ -189,10 +203,24 @@
       <span class="appbar-title"><span class="self">Self</span><span class="name">Messenger</span></span>
       <div class="appbar-actions">
         <button class="iconbtn" id="btnMyCode" title="Mein Code">🔗</button>
+        <button class="iconbtn" id="btnSettings" title="Einstellungen">⚙️</button>
       </div>
     </div>
     <div class="chatlist" id="contacts"><div class="empty">Noch keine Chats.<br />Tippe <b>＋</b> und tauscht eure Codes persönlich.</div></div>
     <button class="fab" id="btnAddFriend" title="Freund hinzufügen">＋</button>
+  </div>
+
+  <!-- ===== EINSTELLUNGEN ===== -->
+  <div id="screenSettings" class="screen" hidden>
+    <div class="appbar"><button class="iconbtn" data-back="screenChats">←</button><span class="appbar-title2">Einstellungen</span></div>
+    <div class="pad">
+      <div class="set-section">Nachrichten</div>
+      <label class="set-row"><span><b>Chatverlauf lokal speichern</b><small>Gespräche bleiben in diesem Browser.</small></span><input type="checkbox" id="setHist" class="switch"></label>
+      <label class="set-row"><span><b>Offline-Nachrichten zwischenlagern</b><small>Wenn der Partner offline ist, wird die Nachricht verschlüsselt beim Kuppler gepuffert.</small></span><input type="checkbox" id="setMbx" class="switch"></label>
+      <p class="hint" style="text-align:left">Standard für neue Chats. Pro Chat lässt sich das im Chat oben über ⋮ überschreiben.</p>
+      <div class="set-section">Sicherheit</div>
+      <p class="hint" style="text-align:left">Alle Inhalte sind Ende-zu-Ende verschlüsselt und laufen direkt Gerät-zu-Gerät. Der Server sieht nie deine Nachrichten.</p>
+    </div>
   </div>
 
   <!-- ===== MEIN CODE ===== -->
@@ -236,6 +264,7 @@
       </div>
       <button class="iconbtn" id="callAudio" title="Anrufen" disabled>📞</button>
       <button class="iconbtn" id="callVideo" title="Videoanruf" disabled>📹</button>
+      <button class="iconbtn" id="chatMenu" title="Chat-Einstellungen">⋮</button>
       <span id="me" hidden></span>
     </div>
     <div class="safety" id="safety"></div>
@@ -308,7 +337,29 @@ function addContactFromCode(code){ const o=decodePayload(code); if(!o){ alert('U
   let cs=loadContacts(); if(!cs.find(c=>c.k===o.k)){ cs.push({n:o.n,k:o.k}); saveContacts(cs); }
   renderContacts(); return true; }
 function initialOf(n){ return ((n||'?').trim().charAt(0)||'?').toUpperCase(); }
-function showScreen(id){ ['screenChats','screenCode','screenAdd','chatScreen'].forEach(s=>{ $(s).hidden=(s!==id); }); }
+
+// ===== Einstellungen (2 Schalter: Verlauf + Offline; global + pro Kontakt) =====
+const SET_HIST='sm_set_hist_'+PROFILE, SET_MBX='sm_set_mbx_'+PROFILE;
+function globalFlag(key,def){ const v=localStorage.getItem(key); return v===null?def:v==='1'; }
+function saveHistGlobal(){ return globalFlag(SET_HIST,true); }
+function offlineMbxGlobal(){ return globalFlag(SET_MBX,true); }
+function setSaveHistGlobal(on){ localStorage.setItem(SET_HIST,on?'1':'0'); }
+function setOfflineMbxGlobal(on){ localStorage.setItem(SET_MBX,on?'1':'0'); }
+function resolveFor(base,pub,glob){ const v=localStorage.getItem(base+':'+pub); return v==='on'?true:v==='off'?false:glob; }
+function saveHistFor(pub){ return resolveFor(SET_HIST,pub,saveHistGlobal()); }
+function offlineMbxFor(pub){ return resolveFor(SET_MBX,pub,offlineMbxGlobal()); }
+function overrideOf(base,pub){ const v=localStorage.getItem(base+':'+pub); return v==='on'?true:v==='off'?false:null; }
+function setOverride(base,pub,val){ const k=base+':'+pub; if(val===null) localStorage.removeItem(k); else localStorage.setItem(k,val?'on':'off'); }
+
+// ===== Verlauf-Speicher (localStorage, pro Kontakt; Medien nur als Label) =====
+function storeKey(pub){ return 'sm_msgs_'+PROFILE+'_'+pub; }
+function loadHistory(pub){ try{ return JSON.parse(localStorage.getItem(storeKey(pub))||'[]'); }catch(_){ return []; } }
+function appendHistory(pub,rec){ const l=loadHistory(pub); l.push(rec); while(l.length>2000) l.shift(); localStorage.setItem(storeKey(pub),JSON.stringify(l)); }
+function clearHistory(pub){ localStorage.removeItem(storeKey(pub)); }
+function recordMsg(pub,fromMe,text,label){ if(pub && saveHistFor(pub)) appendHistory(pub,{m:fromMe,t:text||null,l:label||null,ts:nowTime()}); }
+function mediaLabelOf(meta){ return ({image:'🖼 Bild',voice:'🎤 Sprachnachricht',file:'📎 '+(meta.name||'Datei')})[meta.kind]||'📎 Datei'; }
+
+function showScreen(id){ ['screenChats','screenCode','screenAdd','screenSettings','chatScreen'].forEach(s=>{ $(s).hidden=(s!==id); }); }
 async function renderContacts(){
   const cs=loadContacts(), el=$('contacts');
   if(!cs.length){ el.innerHTML='<div class="empty">Noch keine Chats.<br />Tippe <b>＋</b> und tauscht eure Codes persönlich.</div>'; return; }
@@ -352,6 +403,7 @@ async function connectToContact(c){
   const room=await rendezvous(identity.pubB64,c.k); window.__rendezvous=room;
   $('peerName').textContent=c.n; $('peerAvatar').textContent=initialOf(c.n);
   $('safety').style.display='none'; $('log').innerHTML='';
+  if(saveHistFor(c.k)) for(const r of loadHistory(c.k)) addTextBubble(r.m?'self':'them', r.t!=null?r.t:(r.l||''), null, r.ts);
   showScreen('chatScreen');
   connect(room);
 }
@@ -491,11 +543,11 @@ const incoming=new Map(); window.__lastRecv=null; window.__lastSent=null;
 async function handleDC(m){
   if(m.t==='hs'){ try{ await handleHandshake(await aesUnwrap(m)); }catch(err){ console.error('hs',err); } }
   else if(m.t==='bye'){ hangup(false); }                 // Gegenseite hat aufgelegt
-  else if(m.t==='msg'){ addTextBubble('them',await unsealText(m),'empfangen · verschlüsselt ✓'); }
+  else if(m.t==='msg'){ const txt=await unsealText(m); addTextBubble('them',txt,'empfangen · verschlüsselt ✓'); recordMsg(currentContact&&currentContact.k,false,txt,null); }
   else if(m.t==='meta'){ incoming.set(m.id,{meta:m,parts:new Array(m.total),got:0,bubble:addMediaBubble('them',m,true)}); }
   else if(m.t==='chunk'){ const rec=incoming.get(m.id); if(!rec) return; rec.parts[m.i]=await unsealChunk(m); rec.got++;
     if(rec.bubble) rec.bubble.querySelector('i').style.width=Math.round(rec.got/rec.meta.total*100)+'%';
-    if(rec.got===rec.meta.total){ await assemble(rec); incoming.delete(m.id); } }
+    if(rec.got===rec.meta.total){ await assemble(rec); recordMsg(currentContact&&currentContact.k,false,null,mediaLabelOf(rec.meta)); incoming.delete(m.id); } }
 }
 async function assemble(rec){ const total=rec.parts.reduce((n,p)=>n+p.length,0), buf=new Uint8Array(total); let o=0;
   for(const p of rec.parts){ buf.set(p,o); o+=p.length; } window.__lastRecv={hash:await sha(buf),size:buf.length,name:rec.meta.name};
@@ -505,6 +557,7 @@ async function sendBytes(bytes,kind,name,mime){ const id=(crypto.randomUUID&&cry
   const total=Math.max(1,Math.ceil(bytes.length/CHUNK));
   const meta={t:'meta',id,kind,name:name||'',mime:mime||'application/octet-stream',size:bytes.length,total};
   dc.send(JSON.stringify(meta)); const bubble=addMediaBubble('self',meta,true);
+  recordMsg(currentContact&&currentContact.k,true,null,mediaLabelOf(meta));
   for(let i=0;i<total;i++){ const c=await sealChunk(bytes.subarray(i*CHUNK,(i+1)*CHUNK));
     while(dc.bufferedAmount>MAX_BUF) await new Promise(r=>setTimeout(r,20)); dc.send(JSON.stringify(Object.assign({t:'chunk',id,i},c)));
     if(bubble) bubble.querySelector('i').style.width=Math.round((i+1)/total*100)+'%'; }
@@ -512,8 +565,8 @@ async function sendBytes(bytes,kind,name,mime){ const id=(crypto.randomUUID&&cry
   renderMedia(bubble,meta,new Blob([bytes],{type:meta.mime})); return window.__lastSent.hash; }
 async function sendFileLike(file,kind){ await sendBytes(new Uint8Array(await file.arrayBuffer()),kind,file.name,file.type); }
 function nowTime(){ const d=new Date(); return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0'); }
-function addTextBubble(who,text,meta){ const d=document.createElement('div'); d.className='msg '+who; d.textContent=text;
-  const s=document.createElement('span'); s.className='m'; s.textContent=nowTime(); d.appendChild(s); $('log').appendChild(d); $('log').scrollTop=$('log').scrollHeight; return d; }
+function addTextBubble(who,text,meta,time){ const d=document.createElement('div'); d.className='msg '+who; d.textContent=text;
+  const s=document.createElement('span'); s.className='m'; s.textContent=time||nowTime(); d.appendChild(s); $('log').appendChild(d); $('log').scrollTop=$('log').scrollHeight; return d; }
 function addSys(text){ const d=document.createElement('div'); d.className='msg sys'; d.textContent=text; $('log').appendChild(d); $('log').scrollTop=$('log').scrollHeight; }
 function addMediaBubble(who,meta,wp){ const d=document.createElement('div'); d.className='msg '+who; d.dataset.kind=meta.kind;
   const label={image:'🖼 Bild',voice:'🎤 Sprachnachricht',file:'📎 '+(meta.name||'Datei')}[meta.kind]||'Datei';
@@ -537,7 +590,8 @@ async function receiveOffline(blob){
   for(const c of loadContacts()){                       // Probe-Entschlüsselung: nur der echte Absender passt
     try{ const key=await deriveSessionWith(c.k); const text=dec.decode(await aesDecWith(key,blob.iv,blob.ct));
       window.__offline=window.__offline||[]; window.__offline.push({from:c.n,text});
-      if(currentContact&&currentContact.k===c.k) addTextBubble('them',text,'📨 offline zugestellt ✓');
+      recordMsg(c.k,false,text,null);                    // in den Verlauf legen (falls Speichern an)
+      if(currentContact&&currentContact.k===c.k) addTextBubble('them',text,'📨 offline zugestellt ✓');  // offener Chat: live
       return; }catch(_){}
   }
 }
@@ -545,11 +599,16 @@ async function sendChat(){ const t=$('in').value.trim(); if(!t) return; $('in').
   if(session && dc && dc.readyState==='open'){           // live: Double Ratchet oder AES-Grundschicht
     dc.send(JSON.stringify(Object.assign({t:'msg'},await sealText(t))));
     addTextBubble('self',t,ratchetReady?'gesendet · Double Ratchet':'gesendet · verschlüsselt');
-  } else if(currentContact && ws && ws.readyState===1){  // Partner offline: verschlüsselt in den Briefkasten
+    recordMsg(currentContact&&currentContact.k,true,t,null);
+  } else if(currentContact && ws && ws.readyState===1){  // Partner offline
+    if(!offlineMbxFor(currentContact.k)){                 // Zwischenlagern aus -> nicht zustellen
+      addTextBubble('self',t,'✗ nicht zugestellt (offline, Zwischenlagern aus)'); recordMsg(currentContact.k,true,t,null); return;
+    }
     const key=await deriveSessionWith(currentContact.k);
     const blob=await aesEncWith(key,enc.encode(t));
     ws.send(JSON.stringify({type:'store',mailbox:await mailboxId(currentContact.k),blob}));
     addTextBubble('self',t,'✉ offline hinterlegt (wird zugestellt)');
+    recordMsg(currentContact.k,true,t,null);
   }
 }
 let mediaRec=null,recChunks=[];
@@ -573,6 +632,30 @@ async function copyMyCode(btnId,label){
 }
 $('btnMyCode').onclick=()=>showScreen('screenCode');
 $('btnAddFriend').onclick=()=>showScreen('screenAdd');
+$('btnSettings').onclick=()=>{ $('setHist').checked=saveHistGlobal(); $('setMbx').checked=offlineMbxGlobal(); showScreen('screenSettings'); };
+$('setHist').onchange=e=>setSaveHistGlobal(e.target.checked);
+$('setMbx').onchange=e=>setOfflineMbxGlobal(e.target.checked);
+$('chatMenu').onclick=openChatMenu;
+function openChatMenu(){ if(!currentContact) return; const pub=currentContact.k;
+  document.querySelectorAll('.modal-ov').forEach(x=>x.remove());
+  const ov=document.createElement('div'); ov.className='modal-ov';
+  const box=document.createElement('div'); box.className='modal-box';
+  box.innerHTML='<h3>'+(currentContact.n||'').replace(/</g,'&lt;')+'</h3>'+
+    '<p class="hint" style="text-align:left;margin:.1rem 0 .6rem">Nur für diesen Chat (überschreibt die globale Einstellung).</p>'+
+    '<label class="set-row"><span>Chatverlauf speichern</span><input type="checkbox" id="ovHist" class="switch"></label>'+
+    '<label class="set-row"><span>Offline zwischenlagern</span><input type="checkbox" id="ovMbx" class="switch"></label>'+
+    '<button class="btn-ghost block" id="ovClear" style="color:#e5484d;margin-top:.4rem">🗑 Verlauf dieses Chats löschen</button>'+
+    '<div class="modal-actions"><button class="btn-ghost" id="ovReset">Auf Standard</button><button class="btn-primary" id="ovDone">Fertig</button></div>';
+  ov.appendChild(box); document.body.appendChild(ov);
+  const set=()=>{ $('ovHist').checked=saveHistFor(pub); $('ovMbx').checked=offlineMbxFor(pub); };
+  set();
+  $('ovHist').onchange=e=>setOverride(SET_HIST,pub,e.target.checked);
+  $('ovMbx').onchange=e=>setOverride(SET_MBX,pub,e.target.checked);
+  $('ovReset').onclick=()=>{ setOverride(SET_HIST,pub,null); setOverride(SET_MBX,pub,null); set(); };
+  $('ovClear').onclick=()=>{ clearHistory(pub); if(currentContact&&currentContact.k===pub) $('log').innerHTML=''; };
+  $('ovDone').onclick=()=>ov.remove();
+  ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
+}
 document.querySelectorAll('[data-back]').forEach(b=>b.onclick=()=>showScreen(b.dataset.back));
 $('saveName').onclick=()=>{ setName($('nameInput').value.trim()); renderIdentity(); };
 $('copyCode').onclick=()=>copyMyCode('copyCode','⧉ Kopieren');
