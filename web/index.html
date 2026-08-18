@@ -195,6 +195,24 @@
   .btn-ghost.block{display:block;width:100%;text-align:left}
   .msg .tick{font-size:.72rem;margin-left:5px;letter-spacing:-1px;color:#8a9caa;opacity:.9}
   .msg .tick.read{color:#53bdeb;opacity:1}
+  .msg .body .dl{display:inline-block;margin-top:6px;font-size:12px;color:var(--a);text-decoration:none}
+  .msg.self .body .dl{color:#bfeee0}
+  /* rechte Spalte leer (Breitformat) */
+  .right-empty{align-items:center;justify-content:center;text-align:center;padding:40px}
+  .right-empty .rp-inner{max-width:340px;color:var(--muted)}
+  .rp-logo{font-family:var(--wordmark);font-weight:800;font-size:30px;margin-bottom:10px}
+  .rp-logo .self{color:var(--ice)} .rp-logo .name{color:var(--a)}
+  .right-empty p{font-size:14px;line-height:1.6;margin:6px 0}
+  .right-empty .rp-sec{font-size:12px;color:var(--a);margin-top:16px}
+  /* ===== Breitformat / Landscape: zweispaltig wie WhatsApp Web ===== */
+  @media (min-width:900px){
+    body{padding:20px}
+    .app{max-width:1180px;height:calc(100vh - 40px);min-height:0;display:grid;grid-template-columns:360px 1fr;border:1px solid var(--line);border-radius:14px;box-shadow:0 24px 70px -24px rgba(0,0,0,.6)}
+    .app>.screen{min-height:0;height:100%}
+    #screenChats{grid-column:1;grid-row:1;position:relative;border-right:1px solid var(--line);display:flex!important}
+    #screenCode,#screenAdd,#screenSettings,#chatScreen,#rightPlaceholder{grid-column:2;grid-row:1}
+    #screenChats .fab{position:absolute}
+  }
 </style>
 </head>
 <body>
@@ -280,6 +298,15 @@
     <input type="file" id="file" style="display:none" />
   </div>
 
+  <!-- ===== Platzhalter rechte Spalte (nur Breitformat) ===== -->
+  <div id="rightPlaceholder" class="screen right-empty" hidden>
+    <div class="rp-inner">
+      <div class="rp-logo"><span class="self">Self</span><span class="name">Messenger</span></div>
+      <p>Wähle links einen Chat — oder tippe ＋, um einen Freund hinzuzufügen.</p>
+      <p class="rp-sec">🔒 Ende-zu-Ende verschlüsselt · serverlos</p>
+    </div>
+  </div>
+
   <!-- ===== ANRUF (Vollbild, WhatsApp-Stil) ===== -->
   <div id="callOverlay" class="call-overlay" hidden>
     <video id="remoteVideo" class="remote-video" autoplay playsinline></video>
@@ -363,7 +390,22 @@ function updateHistoryStatus(pub,id,s){ if(!pub||!id||!saveHistFor(pub)) return;
   for(const r of l){ if(r.id===id){ r.st=s; ch=true; } } if(ch) localStorage.setItem(storeKey(pub),JSON.stringify(l)); }
 function mediaLabelOf(meta){ return ({image:'🖼 Bild',voice:'🎤 Sprachnachricht',file:'📎 '+(meta.name||'Datei')})[meta.kind]||'📎 Datei'; }
 
-function showScreen(id){ ['screenChats','screenCode','screenAdd','screenSettings','chatScreen'].forEach(s=>{ $(s).hidden=(s!==id); }); }
+const RIGHT_SCREENS=['screenCode','screenAdd','screenSettings','chatScreen'];
+let curScreen='screenChats';
+function isWide(){ return window.matchMedia('(min-width:900px)').matches; }
+function applyLayout(){
+  if(isWide()){                                   // Breitformat: Chat-Liste links dauerhaft, Rest rechts
+    $('screenChats').hidden=false;
+    const target = curScreen==='screenChats' ? null : curScreen;
+    RIGHT_SCREENS.forEach(s=>$(s).hidden=(s!==target));
+    $('rightPlaceholder').hidden = target!==null;
+  } else {                                         // Handyformat: genau ein Screen
+    $('rightPlaceholder').hidden=true;
+    ['screenChats',...RIGHT_SCREENS].forEach(s=>$(s).hidden=(s!==curScreen));
+  }
+}
+function showScreen(id){ curScreen=id; applyLayout(); }
+window.addEventListener('resize', applyLayout);
 async function renderContacts(){
   const cs=loadContacts(), el=$('contacts');
   if(!cs.length){ el.innerHTML='<div class="empty">Noch keine Chats.<br />Tippe <b>＋</b> und tauscht eure Codes persönlich.</div>'; return; }
@@ -584,7 +626,7 @@ function addMediaBubble(who,meta,wp){ const d=document.createElement('div'); d.c
   $('log').appendChild(d); $('log').scrollTop=$('log').scrollHeight; return d; }
 function renderMedia(bubble,meta,blob){ if(!bubble) return; const url=URL.createObjectURL(blob);
   const body=bubble.querySelector('.body'), prog=bubble.querySelector('.prog'); if(prog) prog.remove();
-  if(meta.kind==='image') body.innerHTML='<img src="'+url+'" alt="Bild">';
+  if(meta.kind==='image') body.innerHTML='<img src="'+url+'" alt="Bild"><a class="dl" download="'+((meta.name||'bild.jpg')+'').replace(/"/g,'')+'" href="'+url+'">⬇ Speichern</a>';
   else if(meta.kind==='voice') body.innerHTML='<audio controls src="'+url+'"></audio>';
   else body.innerHTML='<a class="file" download="'+(meta.name||'datei.bin')+'" href="'+url+'">⬇ '+(meta.name||'Datei')+'</a>';
   bubble.querySelector('.m').textContent='verschlüsselt ✓'; }
@@ -715,7 +757,7 @@ window.__getPayload=()=>myPayload();
 window.__addContact=(code)=>addContactFromCode(code);
 window.__connectFirst=()=>{ const cs=loadContacts(); if(cs.length) connectToContact(cs[0]); return cs[0]; };
 
-(async()=>{ await loadOrCreateIdentity(); renderIdentity(); await renderContacts();
+(async()=>{ await loadOrCreateIdentity(); renderIdentity(); await renderContacts(); applyLayout();
   try{ await Olm.init({locateFile:()=>'olm.wasm'}); olmReady=true; }catch(e){ console.error('olm init',e); }
   try{ await openMailbox(); }catch(e){ console.error('mailbox',e); } })();
 </script>
