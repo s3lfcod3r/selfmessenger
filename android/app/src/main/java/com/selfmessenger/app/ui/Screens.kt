@@ -359,7 +359,7 @@ private fun AddFriendScreen(onBack: () -> Unit) {
 
 private data class MediaData(val kind: String, val name: String, val mime: String, val bytes: ByteArray)
 private data class ChatItem(val fromMe: Boolean, val text: String? = null, val media: MediaData? = null, val time: String = nowTime(), val id: String? = null, val status: String? = null)
-private data class CallUi(val video: Boolean, val incoming: Boolean, val muted: Boolean = false, val camOff: Boolean = false)
+private data class CallUi(val video: Boolean, val incoming: Boolean, val connected: Boolean = false, val muted: Boolean = false, val camOff: Boolean = false)
 
 @Composable
 private fun ChatScreen(me: Me, contact: Contact, onBack: () -> Unit) {
@@ -433,7 +433,7 @@ private fun ChatScreen(me: Me, contact: Contact, onBack: () -> Unit) {
         conn.onRemoteVideo = { remoteVideo = it }
         conn.onMedia = { fromMe, kind, name, mime, bytes, id -> val item = ChatItem(fromMe, media = MediaData(kind, name, mime, bytes), id = id, status = if (fromMe) "pending" else null); messages.add(item); persist(item, mediaLabel(kind, name)) }
         conn.onIncomingCall = { video -> if (call == null) call = CallUi(video = video, incoming = true) else if (video) call = call!!.copy(video = true) }
-        conn.onCallConnected = { call = call?.copy(incoming = false) }
+        conn.onCallConnected = { call = call?.copy(incoming = false, connected = true) }
         conn.onCallEnded = { call = null; localVideo = null; remoteVideo = null }
         conn.onSentStatus = { id, s -> updateStatus(id, s) }
         conn.start()
@@ -492,7 +492,7 @@ private fun ChatScreen(me: Me, contact: Contact, onBack: () -> Unit) {
     // Vollbild-Anruf
     call?.let { c ->
         CallOverlay(c, contact, conn.egl.eglBaseContext, localVideo, remoteVideo,
-            onAccept = { withCallPerms(c.video) { conn.acceptCall(); call = c.copy(incoming = false) } },
+            onAccept = { withCallPerms(c.video) { conn.acceptCall(); call = c.copy(incoming = false, connected = true) } },
             onHangup = { conn.hangupCall(); call = null; localVideo = null; remoteVideo = null },
             onMute = { val m = !c.muted; conn.setMicEnabled(!m); call = c.copy(muted = m) },
             onCam = { val o = !c.camOff; conn.setCamEnabled(!o); call = c.copy(camOff = o) })
@@ -615,11 +615,15 @@ private fun CallOverlay(
     onAccept: () -> Unit, onHangup: () -> Unit, onMute: () -> Unit, onCam: () -> Unit
 ) {
     var secs by remember { mutableStateOf(0) }
-    LaunchedEffect(call.incoming) { if (!call.incoming) { secs = 0; while (true) { delay(1000); secs++ } } }
-    val stateText = if (call.incoming) "Eingehender Anruf …" else "%02d:%02d".format(secs / 60, secs % 60)
+    LaunchedEffect(call.connected) { if (call.connected) { secs = 0; while (true) { delay(1000); secs++ } } }
+    val stateText = when {
+        call.incoming -> "Eingehender Anruf …"
+        !call.connected -> "ruft an …"
+        else -> "%02d:%02d".format(secs / 60, secs % 60)
+    }
 
     Box(Modifier.fillMaxSize().background(Color(0xFF05070A))) {
-        if (call.video && !call.incoming) {
+        if (call.video && call.connected) {
             VideoRenderer(remote, egl, Modifier.fillMaxSize())
             VideoRenderer(local, egl, Modifier.align(Alignment.TopEnd).padding(16.dp).size(100.dp, 146.dp).clip(RoundedCornerShape(12.dp)))
             Column(Modifier.align(Alignment.TopCenter).padding(top = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
