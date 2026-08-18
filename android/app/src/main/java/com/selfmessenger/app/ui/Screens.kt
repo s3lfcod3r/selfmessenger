@@ -41,6 +41,7 @@ import com.selfmessenger.app.Contacts
 import com.selfmessenger.app.Identity
 import com.selfmessenger.app.Me
 import com.selfmessenger.app.MessageStore
+import com.selfmessenger.app.OfflineBus
 import com.selfmessenger.app.Qr
 import com.selfmessenger.app.Settings
 import com.selfmessenger.app.StoredMsg
@@ -122,10 +123,14 @@ private fun MainNav(onPrepareVpn: ((Boolean) -> Unit) -> Unit) {
 
     DisposableEffect(Unit) {
         val mbx = MailboxClient(ctx.applicationContext, me, Config.SIGNALING_URL) { from, text ->
-            // Offline-Nachricht: in den Verlauf des passenden Kontakts legen (falls Speichern an) + Hinweis.
+            // Offline-Nachricht: in den Verlauf des passenden Kontakts legen (falls Speichern an),
+            // an einen ggf. offenen Chat live weiterreichen + Hinweis anzeigen.
             val c = Contacts.all(ctx).firstOrNull { it.name == from }
-            if (c != null && Settings.saveHistoryFor(ctx, c.pubB64))
-                MessageStore.append(ctx, c.pubB64, StoredMsg(false, text, null, nowTime()))
+            if (c != null) {
+                if (Settings.saveHistoryFor(ctx, c.pubB64))
+                    MessageStore.append(ctx, c.pubB64, StoredMsg(false, text, null, nowTime()))
+                OfflineBus.emit(c.pubB64, text)
+            }
             Toast.makeText(ctx, "📨 $from: $text", Toast.LENGTH_LONG).show()
         }
         mbx.start(); onDispose { mbx.stop() }
@@ -392,6 +397,11 @@ private fun ChatScreen(me: Me, contact: Contact, onBack: () -> Unit) {
         onDispose { conn.close() }
     }
     LaunchedEffect(messages.size) { if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1) }
+    // Offline zugestellte Nachricht live einblenden, wenn dieser Chat gerade offen ist
+    // (persistiert wird sie bereits app-global in MainNav).
+    LaunchedEffect(contact.pubB64) {
+        OfflineBus.events.collect { (pub, text) -> if (pub == contact.pubB64) messages.add(ChatItem(false, text = text)) }
+    }
 
     Column(Modifier.fillMaxSize()) {
         // Kopfzeile
