@@ -11,6 +11,14 @@ export default {
       const room = url.searchParams.get('room') || 'default';
       return env.ROOMS.get(env.ROOMS.idFromName(room)).fetch(req);
     }
+    // Direkter Briefkasten-Einwurf: verschlüsselten Blob in den Briefkasten legen, ganz ohne P2P/Room.
+    if (url.pathname === '/send' && req.method === 'POST') {
+      let body = null; try { body = await req.json(); } catch (_) {}
+      if (!body || !body.mailbox || !body.blob) return new Response('bad request', { status: 400 });
+      const stub = env.MAILBOX.get(env.MAILBOX.idFromName(body.mailbox));
+      await stub.fetch('https://mbx/enqueue', { method: 'POST', body: JSON.stringify(body.blob) });
+      return new Response('ok');
+    }
     return new Response('SelfMessenger signaling: ok', { status: 200 });
   }
 };

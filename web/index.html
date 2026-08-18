@@ -193,6 +193,8 @@
   .modal-box h3{margin:0 0 .1rem;color:#eef4f7;font-size:1.1rem}
   .modal-actions{display:flex;justify-content:flex-end;gap:.5rem;margin-top:.8rem}
   .btn-ghost.block{display:block;width:100%;text-align:left}
+  .msg .tick{font-size:.72rem;margin-left:5px;letter-spacing:-1px;color:#8a9caa;opacity:.9}
+  .msg .tick.read{color:#53bdeb;opacity:1}
 </style>
 </head>
 <body>
@@ -356,7 +358,9 @@ function storeKey(pub){ return 'sm_msgs_'+PROFILE+'_'+pub; }
 function loadHistory(pub){ try{ return JSON.parse(localStorage.getItem(storeKey(pub))||'[]'); }catch(_){ return []; } }
 function appendHistory(pub,rec){ const l=loadHistory(pub); l.push(rec); while(l.length>2000) l.shift(); localStorage.setItem(storeKey(pub),JSON.stringify(l)); }
 function clearHistory(pub){ localStorage.removeItem(storeKey(pub)); }
-function recordMsg(pub,fromMe,text,label){ if(pub && saveHistFor(pub)) appendHistory(pub,{m:fromMe,t:text||null,l:label||null,ts:nowTime()}); }
+function recordMsg(pub,fromMe,text,label,id,st){ if(pub && saveHistFor(pub)) appendHistory(pub,{m:fromMe,t:text||null,l:label||null,ts:nowTime(),id:id||null,st:st||null}); }
+function updateHistoryStatus(pub,id,s){ if(!pub||!id||!saveHistFor(pub)) return; const l=loadHistory(pub); let ch=false;
+  for(const r of l){ if(r.id===id){ r.st=s; ch=true; } } if(ch) localStorage.setItem(storeKey(pub),JSON.stringify(l)); }
 function mediaLabelOf(meta){ return ({image:'🖼 Bild',voice:'🎤 Sprachnachricht',file:'📎 '+(meta.name||'Datei')})[meta.kind]||'📎 Datei'; }
 
 function showScreen(id){ ['screenChats','screenCode','screenAdd','screenSettings','chatScreen'].forEach(s=>{ $(s).hidden=(s!==id); }); }
@@ -403,8 +407,11 @@ async function connectToContact(c){
   const room=await rendezvous(identity.pubB64,c.k); window.__rendezvous=room;
   $('peerName').textContent=c.n; $('peerAvatar').textContent=initialOf(c.n);
   $('safety').style.display='none'; $('log').innerHTML='';
-  if(saveHistFor(c.k)) for(const r of loadHistory(c.k)) addTextBubble(r.m?'self':'them', r.t!=null?r.t:(r.l||''), null, r.ts);
+  if(saveHistFor(c.k)) for(const r of loadHistory(c.k)){
+    const b=addTextBubble(r.m?'self':'them', r.t!=null?r.t:(r.l||''), null, r.ts, r.id, r.st);
+    if(r.m && r.id) sentMsgs.set(r.id,{bubble:b,pub:c.k}); }
   showScreen('chatScreen');
+  flushReadAcks(c.k);            // offene, empfangene Nachrichten als gelesen bestätigen
   connect(room);
 }
 function connect(room){
@@ -543,7 +550,8 @@ const incoming=new Map(); window.__lastRecv=null; window.__lastSent=null;
 async function handleDC(m){
   if(m.t==='hs'){ try{ await handleHandshake(await aesUnwrap(m)); }catch(err){ console.error('hs',err); } }
   else if(m.t==='bye'){ hangup(false); }                 // Gegenseite hat aufgelegt
-  else if(m.t==='msg'){ const txt=await unsealText(m); addTextBubble('them',txt,'empfangen · verschlüsselt ✓'); recordMsg(currentContact&&currentContact.k,false,txt,null); }
+  else if(m.t==='ack'){ updateSentStatus(m.id, m.s==='r'?'read':'delivered'); }   // Haken-Update
+  else if(m.t==='msg'){ const txt=await unsealText(m); await onIncomingMessage(currentContact&&currentContact.k, m.id, txt, 'empfangen · verschlüsselt ✓'); }
   else if(m.t==='meta'){ incoming.set(m.id,{meta:m,parts:new Array(m.total),got:0,bubble:addMediaBubble('them',m,true)}); }
   else if(m.t==='chunk'){ const rec=incoming.get(m.id); if(!rec) return; rec.parts[m.i]=await unsealChunk(m); rec.got++;
     if(rec.bubble) rec.bubble.querySelector('i').style.width=Math.round(rec.got/rec.meta.total*100)+'%';
@@ -565,8 +573,10 @@ async function sendBytes(bytes,kind,name,mime){ const id=(crypto.randomUUID&&cry
   renderMedia(bubble,meta,new Blob([bytes],{type:meta.mime})); return window.__lastSent.hash; }
 async function sendFileLike(file,kind){ await sendBytes(new Uint8Array(await file.arrayBuffer()),kind,file.name,file.type); }
 function nowTime(){ const d=new Date(); return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0'); }
-function addTextBubble(who,text,meta,time){ const d=document.createElement('div'); d.className='msg '+who; d.textContent=text;
-  const s=document.createElement('span'); s.className='m'; s.textContent=time||nowTime(); d.appendChild(s); $('log').appendChild(d); $('log').scrollTop=$('log').scrollHeight; return d; }
+function addTextBubble(who,text,meta,time,id,status){ const d=document.createElement('div'); d.className='msg '+who; if(id) d.dataset.id=id; d.textContent=text;
+  const s=document.createElement('span'); s.className='m'; s.textContent=time||nowTime(); d.appendChild(s);
+  if(who==='self'){ const tk=document.createElement('span'); tk.className='tick'; if(status){ tk.textContent=statusGlyph(status); if(status==='read') tk.classList.add('read'); d.dataset.status=status; } d.appendChild(tk); }
+  $('log').appendChild(d); $('log').scrollTop=$('log').scrollHeight; return d; }
 function addSys(text){ const d=document.createElement('div'); d.className='msg sys'; d.textContent=text; $('log').appendChild(d); $('log').scrollTop=$('log').scrollHeight; }
 function addMediaBubble(who,meta,wp){ const d=document.createElement('div'); d.className='msg '+who; d.dataset.kind=meta.kind;
   const label={image:'🖼 Bild',voice:'🎤 Sprachnachricht',file:'📎 '+(meta.name||'Datei')}[meta.kind]||'Datei';
@@ -588,29 +598,56 @@ async function openMailbox(){
 }
 async function receiveOffline(blob){
   for(const c of loadContacts()){                       // Probe-Entschlüsselung: nur der echte Absender passt
-    try{ const key=await deriveSessionWith(c.k); const text=dec.decode(await aesDecWith(key,blob.iv,blob.ct));
-      window.__offline=window.__offline||[]; window.__offline.push({from:c.n,text});
-      recordMsg(c.k,false,text,null);                    // in den Verlauf legen (falls Speichern an)
-      if(currentContact&&currentContact.k===c.k) addTextBubble('them',text,'📨 offline zugestellt ✓');  // offener Chat: live
-      return; }catch(_){}
-  }
-}
-async function sendChat(){ const t=$('in').value.trim(); if(!t) return; $('in').value='';
-  if(session && dc && dc.readyState==='open'){           // live: Double Ratchet oder AES-Grundschicht
-    dc.send(JSON.stringify(Object.assign({t:'msg'},await sealText(t))));
-    addTextBubble('self',t,ratchetReady?'gesendet · Double Ratchet':'gesendet · verschlüsselt');
-    recordMsg(currentContact&&currentContact.k,true,t,null);
-  } else if(currentContact && ws && ws.readyState===1){  // Partner offline
-    if(!offlineMbxFor(currentContact.k)){                 // Zwischenlagern aus -> nicht zustellen
-      addTextBubble('self',t,'✗ nicht zugestellt (offline, Zwischenlagern aus)'); recordMsg(currentContact.k,true,t,null); return;
+    let raw; try{ const key=await deriveSessionWith(c.k); raw=dec.decode(await aesDecWith(key,blob.iv,blob.ct)); }catch(_){ continue; }
+    let env; try{ env=JSON.parse(raw); if(!env||typeof env!=='object'||!env.t) env={t:'m',id:null,body:raw}; }catch(_){ env={t:'m',id:null,body:raw}; }
+    if(env.t==='a'){                                     // Bestätigung: Haken bei meiner gesendeten Nachricht setzen
+      updateSentStatus(env.id, env.s==='r'?'read':'delivered');
+    } else {                                             // echte Nachricht
+      window.__offline=window.__offline||[]; window.__offline.push({from:c.n,text:env.body});
+      await onIncomingMessage(c.k, env.id, env.body, '📨 offline zugestellt ✓');
     }
-    const key=await deriveSessionWith(currentContact.k);
-    const blob=await aesEncWith(key,enc.encode(t));
-    ws.send(JSON.stringify({type:'store',mailbox:await mailboxId(currentContact.k),blob}));
-    addTextBubble('self',t,'✉ offline hinterlegt (wird zugestellt)');
-    recordMsg(currentContact.k,true,t,null);
+    return;
   }
 }
+// ===== Status-Haken (✓ gesendet / ✓✓ zugestellt / ✓✓ blau gelesen) + zuverlässiger Offline-Versand =====
+const SEND_BASE = SIG_BASE.replace(/^ws/,'http').replace(/\/ws(\?.*)?$/,'/send');
+function newId(){ return (crypto.randomUUID&&crypto.randomUUID())||(String(Date.now())+Math.random()); }
+const sentMsgs=new Map();            // id -> {bubble, pub}
+const pendingReadAcks=new Map();     // pub -> Set(id): empfangen, aber noch nicht als gelesen bestätigt
+const RANK={pending:0,sent:1,delivered:2,read:3};
+function statusGlyph(s){ return s==='pending'?'🕓':s==='sent'?'✓':(s==='delivered'||s==='read')?'✓✓':''; }
+function setBubbleStatus(bubble,s){ if(!bubble) return; const cur=bubble.dataset.status;
+  if(cur&&RANK[cur]!=null&&RANK[s]!=null&&RANK[cur]>=RANK[s]) return;               // nie herabstufen
+  let el=bubble.querySelector('.tick'); if(!el){ el=document.createElement('span'); el.className='tick'; bubble.appendChild(el); }
+  el.textContent=statusGlyph(s); el.classList.toggle('read',s==='read'); bubble.dataset.status=s; }
+function chatOpenWith(pub){ return !$('chatScreen').hidden && currentContact && currentContact.k===pub; }
+async function postOffline(pub,obj){
+  try{ const key=await deriveSessionWith(pub); const blob=await aesEncWith(key,enc.encode(JSON.stringify(obj)));
+    const r=await fetch(SEND_BASE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mailbox:await mailboxId(pub),blob})});
+    return r.ok; }catch(e){ console.error('postOffline',e); return false; } }
+async function sendAck(pub,id,s){ if(!id) return;
+  if(currentContact&&currentContact.k===pub&&dc&&dc.readyState==='open') dc.send(JSON.stringify({t:'ack',id,s}));
+  else await postOffline(pub,{t:'a',id,s}); }
+function updateSentStatus(id,s){ const e=sentMsgs.get(id); if(e){ setBubbleStatus(e.bubble,s); updateHistoryStatus(e.pub,id,s); } }
+function queueRead(pub,id){ if(!id) return; let set=pendingReadAcks.get(pub); if(!set){ set=new Set(); pendingReadAcks.set(pub,set); } set.add(id); }
+async function flushReadAcks(pub){ const set=pendingReadAcks.get(pub); if(!set) return; pendingReadAcks.delete(pub); for(const id of set) await sendAck(pub,id,'r'); }
+async function onIncomingMessage(pub,id,text,note){
+  recordMsg(pub,false,text,null,id);
+  if(chatOpenWith(pub)) addTextBubble('them',text,note||'empfangen · verschlüsselt ✓');
+  if(id){ await sendAck(pub,id,'d'); if(chatOpenWith(pub)) await sendAck(pub,id,'r'); else queueRead(pub,id); } }
+async function sendChat(){ const t=$('in').value.trim(); if(!t) return; $('in').value='';
+  const id=newId(), pub=currentContact&&currentContact.k;
+  const bubble=addTextBubble('self',t,'',null,id,'pending'); if(pub) sentMsgs.set(id,{bubble,pub});
+  recordMsg(pub,true,t,null,id,'pending');
+  if(session && dc && dc.readyState==='open'){                 // live über WebRTC
+    dc.send(JSON.stringify(Object.assign({t:'msg',id},await sealText(t))));
+    setBubbleStatus(bubble,'sent'); updateHistoryStatus(pub,id,'sent');
+  } else if(pub && offlineMbxFor(pub)){                          // offline: direkt in den Briefkasten (ohne P2P)
+    const ok=await postOffline(pub,{t:'m',id,body:t});
+    setBubbleStatus(bubble,ok?'sent':'pending'); updateHistoryStatus(pub,id,ok?'sent':'pending');
+  } else if(pub){                                                // Zwischenlagern aus -> nicht zustellbar
+    const tk=bubble.querySelector('.tick'); if(tk) tk.textContent='⚠'; bubble.title='nicht zugestellt (Zwischenlagern aus)';
+  } }
 let mediaRec=null,recChunks=[];
 async function toggleRec(){ if(mediaRec&&mediaRec.state==='recording'){ mediaRec.stop(); return; }
   try{ const st=await navigator.mediaDevices.getUserMedia({audio:true}); recChunks=[]; mediaRec=new MediaRecorder(st);
