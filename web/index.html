@@ -309,23 +309,32 @@ async function finishSecure(){
   session=await deriveSessionWith(currentContact.k); window.session=session;
   window.__sn=await safetyNumber(identity.pubRaw,fromB64(currentContact.k));
   $('safety').style.display='block';
-  $('safety').innerHTML='Sicherheitsnummer <b>'+window.__sn+'</b> — persönlich getauscht · richte Double Ratchet ein…';
-  setStatus('sichere Verbindung, starte Double Ratchet…','wait');
-  await startRatchet();
+  $('safety').innerHTML='Sicherheitsnummer <b>'+window.__sn+'</b> — persönlich getauscht';
+  ['in','send','attach','recBtn','callAudio','callVideo'].forEach(i=>$(i).disabled=false); // SOFORT nutzbar
+  setStatus('✓ Ende-zu-Ende-verschlüsselt · '+currentContact.n,'ok');
+  startRatchet();  // Double Ratchet als Upgrade im Hintergrund — blockiert den Chat NICHT
 }
+// Inhalt versiegeln: Double Ratchet wenn bereit, sonst starke AES-Grundschicht. r-Flag markiert, womit.
+async function sealText(t){ if(ratchetReady){ const e=ratchet.encrypt(t); return {r:1,ty:e.type,body:e.body}; } const {iv,ct}=await encBytes(enc.encode(t)); return {r:0,iv,ct}; }
+async function unsealText(m){ return m.r ? ratchet.decrypt(m.ty,m.body) : dec.decode(await decBytes(m.iv,m.ct)); }
+async function sealChunk(bytes){ if(ratchetReady){ const e=ratchet.encrypt(b64(bytes)); return {r:1,ty:e.type,body:e.body}; } const {iv,ct}=await encBytes(bytes); return {r:0,iv,ct}; }
+async function unsealChunk(m){ return m.r ? fromB64(ratchet.decrypt(m.ty,m.body)) : await decBytes(m.iv,m.ct); }
 // Ratchet-Handshake läuft AES-verpackt über den identitäts-verschlüsselten Kanal -> MITM-sicher authentifiziert
 async function aesWrap(obj){ const {iv,ct}=await encBytes(enc.encode(JSON.stringify(obj))); return {t:'hs',iv,ct}; }
 async function aesUnwrap(m){ return JSON.parse(dec.decode(await decBytes(m.iv,m.ct))); }
 async function startRatchet(){
-  while(!olmReady) await new Promise(r=>setTimeout(r,50));
-  selfAcct=new Olm.Account(); selfAcct.create();
-  if(!iAmInitiator){                                  // Responder veröffentlicht olm-Schlüssel
-    selfAcct.generate_one_time_keys(1);
-    const id=JSON.parse(selfAcct.identity_keys()).curve25519;
-    const otk=Object.values(JSON.parse(selfAcct.one_time_keys()).curve25519)[0];
-    selfAcct.mark_keys_as_published();
-    dc.send(JSON.stringify(await aesWrap({k:'olm-keys',id,otk})));
-  }
+  try{
+    const t0=Date.now(); while(!olmReady && Date.now()-t0<6000) await new Promise(r=>setTimeout(r,50));
+    if(!olmReady) return;                              // olm nicht verfügbar -> AES-Grundschicht bleibt aktiv
+    selfAcct=new Olm.Account(); selfAcct.create();
+    if(!iAmInitiator){                                  // Responder veröffentlicht olm-Schlüssel
+      selfAcct.generate_one_time_keys(1);
+      const id=JSON.parse(selfAcct.identity_keys()).curve25519;
+      const otk=Object.values(JSON.parse(selfAcct.one_time_keys()).curve25519)[0];
+      selfAcct.mark_keys_as_published();
+      dc.send(JSON.stringify(await aesWrap({k:'olm-keys',id,otk})));
+    }
+  }catch(err){ console.error('ratchet',err); }          // Fehler -> AES bleibt aktiv, Chat läuft weiter
 }
 async function handleHandshake(h){
   if(h.k==='olm-keys'){                               // Initiator: Outbound-Session + Pre-Key-Hello
@@ -340,9 +349,8 @@ async function handleHandshake(h){
   }
 }
 function enableChatRatchet(){
-  ratchetReady=true; window.ratchetReady=true;
-  $('safety').innerHTML='Sicherheitsnummer <b>'+window.__sn+'</b> · 🔒 Double Ratchet aktiv (libolm)';
-  ['in','send','attach','recBtn','callAudio','callVideo'].forEach(i=>$(i).disabled=false);
+  ratchetReady=true; window.ratchetReady=true;                 // Chat war schon aktiv (AES); jetzt Upgrade
+  $('safety').innerHTML='Sicherheitsnummer <b>'+window.__sn+'</b> · 🔒 Double Ratchet aktiv';
   setStatus('✓ Ende-zu-Ende · Double Ratchet · '+currentContact.n,'ok');
 }
 
@@ -372,10 +380,10 @@ window.__startSyntheticCall=(video)=>{ const tracks=[]; const AC=window.AudioCon
 // ===== Nachrichten + Medien =====
 const incoming=new Map(); window.__lastRecv=null; window.__lastSent=null;
 async function handleDC(m){
-  if(m.t==='hs'){ await handleHandshake(await aesUnwrap(m)); }
-  else if(m.t==='msg'){ addTextBubble('them',ratchet.decrypt(m.ty,m.body),'empfangen · Double Ratchet ✓'); }
+  if(m.t==='hs'){ try{ await handleHandshake(await aesUnwrap(m)); }catch(err){ console.error('hs',err); } }
+  else if(m.t==='msg'){ addTextBubble('them',await unsealText(m),'empfangen · verschlüsselt ✓'); }
   else if(m.t==='meta'){ incoming.set(m.id,{meta:m,parts:new Array(m.total),got:0,bubble:addMediaBubble('them',m,true)}); }
-  else if(m.t==='chunk'){ const rec=incoming.get(m.id); if(!rec) return; rec.parts[m.i]=fromB64(ratchet.decrypt(m.ty,m.body)); rec.got++;
+  else if(m.t==='chunk'){ const rec=incoming.get(m.id); if(!rec) return; rec.parts[m.i]=await unsealChunk(m); rec.got++;
     if(rec.bubble) rec.bubble.querySelector('i').style.width=Math.round(rec.got/rec.meta.total*100)+'%';
     if(rec.got===rec.meta.total){ await assemble(rec); incoming.delete(m.id); } }
 }
@@ -387,8 +395,8 @@ async function sendBytes(bytes,kind,name,mime){ const id=(crypto.randomUUID&&cry
   const total=Math.max(1,Math.ceil(bytes.length/CHUNK));
   const meta={t:'meta',id,kind,name:name||'',mime:mime||'application/octet-stream',size:bytes.length,total};
   dc.send(JSON.stringify(meta)); const bubble=addMediaBubble('self',meta,true);
-  for(let i=0;i<total;i++){ const e=ratchet.encrypt(b64(bytes.subarray(i*CHUNK,(i+1)*CHUNK)));
-    while(dc.bufferedAmount>MAX_BUF) await new Promise(r=>setTimeout(r,20)); dc.send(JSON.stringify({t:'chunk',id,i,ty:e.type,body:e.body}));
+  for(let i=0;i<total;i++){ const c=await sealChunk(bytes.subarray(i*CHUNK,(i+1)*CHUNK));
+    while(dc.bufferedAmount>MAX_BUF) await new Promise(r=>setTimeout(r,20)); dc.send(JSON.stringify(Object.assign({t:'chunk',id,i},c)));
     if(bubble) bubble.querySelector('i').style.width=Math.round((i+1)/total*100)+'%'; }
   window.__lastSent={hash:await sha(bytes),size:bytes.length,name};
   renderMedia(bubble,meta,new Blob([bytes],{type:meta.mime})); return window.__lastSent.hash; }
@@ -423,9 +431,9 @@ async function receiveOffline(blob){
   }
 }
 async function sendChat(){ const t=$('in').value.trim(); if(!t) return; $('in').value='';
-  if(ratchetReady){                                     // live: Double Ratchet
-    const e=ratchet.encrypt(t); dc.send(JSON.stringify({t:'msg',ty:e.type,body:e.body}));
-    addTextBubble('self',t,'gesendet · Double Ratchet');
+  if(session && dc && dc.readyState==='open'){           // live: Double Ratchet oder AES-Grundschicht
+    dc.send(JSON.stringify(Object.assign({t:'msg'},await sealText(t))));
+    addTextBubble('self',t,ratchetReady?'gesendet · Double Ratchet':'gesendet · verschlüsselt');
   } else if(currentContact && ws && ws.readyState===1){  // Partner offline: verschlüsselt in den Briefkasten
     const key=await deriveSessionWith(currentContact.k);
     const blob=await aesEncWith(key,enc.encode(t));
