@@ -33,8 +33,8 @@ class Connection(
     val egl: EglBase = EglBase.create()
     var onLocalVideo: ((VideoTrack) -> Unit)? = null
     var onRemoteVideo: ((VideoTrack) -> Unit)? = null
-    // Medien: (fromMe, kind, name, mime, bytes)
-    var onMedia: ((Boolean, String, String, String, ByteArray) -> Unit)? = null
+    // Medien: (fromMe, kind, name, mime, bytes, id)
+    var onMedia: ((Boolean, String, String, String, ByteArray, String) -> Unit)? = null
     // Anruf-Ereignisse (WhatsApp-Stil)
     var onIncomingCall: ((video: Boolean) -> Unit)? = null   // eingehender Anruf -> Annehmen-Ansicht
     var onCallConnected: (() -> Unit)? = null                 // Gegenseite hat Medien -> verbunden
@@ -130,7 +130,7 @@ class Connection(
             rtc?.sendText(JSONObject().put("t", "chunk").put("id", id).put("i", i).put("iv", iv).put("ct", ct).toString())
             i++
         }
-        ui { onMedia?.invoke(true, kind, name, mime, bytes) }
+        ui { onMedia?.invoke(true, kind, name, mime, bytes, id); onSentStatus?.invoke(id, "sent") }
     }
 
     private val incoming = HashMap<String, MediaAcc>()
@@ -161,9 +161,12 @@ class Connection(
                 acc.parts[m.getInt("i")] = c.decrypt(m.getString("iv"), m.getString("ct"))
                 acc.got++
                 if (acc.got >= acc.total) {
-                    incoming.remove(m.getString("id"))
+                    val mid = m.getString("id")
+                    incoming.remove(mid)
                     val bytes = acc.assemble()
-                    ui { onMedia?.invoke(false, acc.kind, acc.name, acc.mime, bytes) }
+                    ui { onMedia?.invoke(false, acc.kind, acc.name, acc.mime, bytes, mid) }
+                    rtc?.sendText(JSONObject().put("t", "ack").put("id", mid).put("s", "d").toString())   // Bild vollständig -> zugestellt + gelesen
+                    rtc?.sendText(JSONObject().put("t", "ack").put("id", mid).put("s", "r").toString())
                 }
             }
         }

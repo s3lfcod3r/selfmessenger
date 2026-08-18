@@ -145,6 +145,10 @@
   .peer-name{font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #status{font-size:12px;margin:0;min-height:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .log{flex:1;overflow:auto;display:flex;flex-direction:column;gap:3px;padding:14px 12px;height:auto}
+  .log>*:first-child{margin-top:auto}   /* neueste immer unten, auch bei wenigen Nachrichten */
+  .msg img{cursor:zoom-in}
+  #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;z-index:60;padding:16px}
+  #lightbox img{max-width:100%;max-height:100%;border-radius:6px}
   .msg{max-width:80%;padding:7px 10px 6px;border-radius:11px;font-size:14.5px;line-height:1.35;word-wrap:break-word}
   .msg.self{align-self:flex-end;background:#0c3b30;border:1px solid #14523f;border-bottom-right-radius:3px}
   .msg.them{align-self:flex-start;background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:3px}
@@ -323,6 +327,9 @@
       <button class="call-btn end" id="hangup" title="Auflegen">📞</button>
     </div>
   </div>
+
+  <!-- ===== Bild-Vollansicht ===== -->
+  <div id="lightbox" hidden><img id="lightboxImg" src="" alt="Bild"></div>
 </div>
 <script>
 const enc=new TextEncoder(),dec=new TextDecoder();
@@ -597,7 +604,8 @@ async function handleDC(m){
   else if(m.t==='meta'){ incoming.set(m.id,{meta:m,parts:new Array(m.total),got:0,bubble:addMediaBubble('them',m,true)}); }
   else if(m.t==='chunk'){ const rec=incoming.get(m.id); if(!rec) return; rec.parts[m.i]=await unsealChunk(m); rec.got++;
     if(rec.bubble) rec.bubble.querySelector('i').style.width=Math.round(rec.got/rec.meta.total*100)+'%';
-    if(rec.got===rec.meta.total){ await assemble(rec); recordMsg(currentContact&&currentContact.k,false,null,mediaLabelOf(rec.meta)); incoming.delete(m.id); } }
+    if(rec.got===rec.meta.total){ await assemble(rec); recordMsg(currentContact&&currentContact.k,false,null,mediaLabelOf(rec.meta)); incoming.delete(m.id);
+      const pub=currentContact&&currentContact.k; await sendAck(pub,rec.meta.id,'d'); if(chatOpenWith(pub)) await sendAck(pub,rec.meta.id,'r'); } }
 }
 async function assemble(rec){ const total=rec.parts.reduce((n,p)=>n+p.length,0), buf=new Uint8Array(total); let o=0;
   for(const p of rec.parts){ buf.set(p,o); o+=p.length; } window.__lastRecv={hash:await sha(buf),size:buf.length,name:rec.meta.name};
@@ -607,11 +615,13 @@ async function sendBytes(bytes,kind,name,mime){ const id=(crypto.randomUUID&&cry
   const total=Math.max(1,Math.ceil(bytes.length/CHUNK));
   const meta={t:'meta',id,kind,name:name||'',mime:mime||'application/octet-stream',size:bytes.length,total};
   dc.send(JSON.stringify(meta)); const bubble=addMediaBubble('self',meta,true);
+  if(currentContact) sentMsgs.set(id,{bubble,pub:currentContact.k});
   recordMsg(currentContact&&currentContact.k,true,null,mediaLabelOf(meta));
   for(let i=0;i<total;i++){ const c=await sealChunk(bytes.subarray(i*CHUNK,(i+1)*CHUNK));
     while(dc.bufferedAmount>MAX_BUF) await new Promise(r=>setTimeout(r,20)); dc.send(JSON.stringify(Object.assign({t:'chunk',id,i},c)));
     if(bubble) bubble.querySelector('i').style.width=Math.round((i+1)/total*100)+'%'; }
   window.__lastSent={hash:await sha(bytes),size:bytes.length,name};
+  setBubbleStatus(bubble,'sent');
   renderMedia(bubble,meta,new Blob([bytes],{type:meta.mime})); return window.__lastSent.hash; }
 async function sendFileLike(file,kind){ await sendBytes(new Uint8Array(await file.arrayBuffer()),kind,file.name,file.type); }
 function nowTime(){ const d=new Date(); return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0'); }
@@ -751,6 +761,9 @@ $('attach').onclick=()=>$('file').click();
 $('file').onchange=e=>{ const f=e.target.files[0]; if(!f) return; sendFileLike(f,f.type.startsWith('image/')?'image':'file'); e.target.value=''; };
 $('recBtn').onclick=toggleRec; $('callAudio').onclick=()=>startCall(false); $('callVideo').onclick=()=>startCall(true); $('hangup').onclick=()=>hangup();
 $('btnAccept').onclick=acceptCall; $('btnMute').onclick=toggleMute; $('btnCam').onclick=toggleCam;
+// Bild antippen -> Vollansicht
+$('log').addEventListener('click',e=>{ const el=e.target; if(el.tagName==='IMG' && el.closest('.msg')){ $('lightboxImg').src=el.src; $('lightbox').hidden=false; } });
+$('lightbox').onclick=()=>{ $('lightbox').hidden=true; $('lightboxImg').src=''; };
 window.__sendRandom=async(n,kind='image',mime='image/png')=>sendBytes(crypto.getRandomValues(new Uint8Array(n)),kind,'test.png',mime);
 // Test-Hooks
 window.__getPayload=()=>myPayload();

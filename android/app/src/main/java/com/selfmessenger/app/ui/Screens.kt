@@ -34,6 +34,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import com.selfmessenger.app.Config
 import com.selfmessenger.app.Contact
@@ -412,7 +414,7 @@ private fun ChatScreen(me: Me, contact: Contact, onBack: () -> Unit) {
     DisposableEffect(conn) {
         conn.onLocalVideo = { localVideo = it }
         conn.onRemoteVideo = { remoteVideo = it }
-        conn.onMedia = { fromMe, kind, name, mime, bytes -> val item = ChatItem(fromMe, media = MediaData(kind, name, mime, bytes)); messages.add(item); persist(item, mediaLabel(kind, name)) }
+        conn.onMedia = { fromMe, kind, name, mime, bytes, id -> val item = ChatItem(fromMe, media = MediaData(kind, name, mime, bytes), id = id, status = if (fromMe) "pending" else null); messages.add(item); persist(item, mediaLabel(kind, name)) }
         conn.onIncomingCall = { video -> if (call == null) call = CallUi(video = video, incoming = true) else if (video) call = call!!.copy(video = true) }
         conn.onCallConnected = { call = call?.copy(incoming = false) }
         conn.onCallEnded = { call = null; localVideo = null; remoteVideo = null }
@@ -448,8 +450,8 @@ private fun ChatScreen(me: Me, contact: Contact, onBack: () -> Unit) {
             IconButton(onClick = { showMenu = true }) { Text("⋮", fontSize = 22.sp, color = SelfText) }
         }
         if (showMenu) ContactSettingsDialog(contact, onClearHistory = { MessageStore.clear(ctx, contact.pubB64); messages.clear() }) { showMenu = false }
-        // Nachrichten
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, contentPadding = PaddingValues(vertical = 8.dp)) {
+        // Nachrichten — neueste immer unten (auch bei wenigen Nachrichten)
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.Bottom) {
             items(messages) { item -> MessageBubble(item) }
         }
         // Eingabeleiste
@@ -504,9 +506,15 @@ private fun MediaContent(m: MediaData) {
     when (m.kind) {
         "image" -> {
             val bmp = remember(m) { BitmapFactory.decodeByteArray(m.bytes, 0, m.bytes.size) }
+            var showFull by remember { mutableStateOf(false) }
             Column {
-                if (bmp != null) Image(bmp.asImageBitmap(), m.name, Modifier.heightIn(max = 240.dp).clip(RoundedCornerShape(8.dp)))
+                if (bmp != null) Image(bmp.asImageBitmap(), m.name, Modifier.heightIn(max = 240.dp).clip(RoundedCornerShape(8.dp)).clickable { showFull = true })
                 else Text("🖼 ${m.name}", color = SelfText)
+                if (showFull && bmp != null) Dialog(onDismissRequest = { showFull = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+                    Box(Modifier.fillMaxSize().background(Color(0xF2000000)).clickable { showFull = false }, contentAlignment = Alignment.Center) {
+                        Image(bmp.asImageBitmap(), m.name, Modifier.fillMaxWidth())
+                    }
+                }
                 TextButton(
                     onClick = {
                         val ok = MediaFiles.saveImageToGallery(ctx, m.bytes, m.name, m.mime)
