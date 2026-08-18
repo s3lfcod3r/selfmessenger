@@ -36,12 +36,16 @@ class Connection(
     // Anruf-Ereignisse (WhatsApp-Stil)
     var onIncomingCall: ((video: Boolean) -> Unit)? = null   // eingehender Anruf -> Annehmen-Ansicht
     var onCallConnected: (() -> Unit)? = null                 // Gegenseite hat Medien -> verbunden
+    var onCallEnded: (() -> Unit)? = null                     // Gegenseite hat aufgelegt -> Anruf schließen
     private var callActive = false
     private var callVideo = false
 
     fun startCall(video: Boolean) { callActive = true; callVideo = video; rtc?.startCall(video) }
     fun acceptCall() { callActive = true; rtc?.startCall(callVideo) }   // Mikro/Kamera passend zum eingehenden Anruf
-    fun hangupCall() { callActive = false; callVideo = false; rtc?.hangupCall() }
+    fun hangupCall() {
+        try { rtc?.sendText(JSONObject().put("t", "bye").toString()) } catch (_: Exception) {}  // Gegenseite mit-beenden
+        callActive = false; callVideo = false; rtc?.hangupCall()
+    }
     fun setMicEnabled(on: Boolean) = rtc?.setMicEnabled(on)
     fun setCamEnabled(on: Boolean) = rtc?.setCamEnabled(on)
     private fun onRemoteTrack(kind: String) {
@@ -127,6 +131,7 @@ class Connection(
     private fun onWireText(json: String) {
         val m = JSONObject(json)
         when (m.optString("t")) {
+            "bye" -> { callActive = false; callVideo = false; rtc?.hangupCall(); ui { onCallEnded?.invoke() } }
             "msg" -> {
                 val c = crypto ?: return
                 val plain = String(c.decrypt(m.getString("iv"), m.getString("ct")), Charsets.UTF_8)

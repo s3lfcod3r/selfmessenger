@@ -470,7 +470,8 @@ function toggleMute(){ const a=localStream&&localStream.getAudioTracks()[0]; if(
   $('btnMute').classList.toggle('off',!a.enabled); $('btnMute').textContent=a.enabled?'🎤':'🔇'; }
 function toggleCam(){ const v=localStream&&localStream.getVideoTracks()[0]; if(!v) return; v.enabled=!v.enabled;
   $('btnCam').classList.toggle('off',!v.enabled); }
-function hangup(){ if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
+function hangup(sendBye){ if(sendBye!==false){ try{ if(dc&&dc.readyState==='open') dc.send(JSON.stringify({t:'bye'})); }catch(_){} }
+  if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
   if(remoteStream){ try{ remoteStream.getTracks().forEach(t=>t.stop()); }catch(_){} remoteStream=null; }
   if(window.__synTimer){ clearInterval(window.__synTimer); window.__synTimer=null; }
   if(callTimer){ clearInterval(callTimer); callTimer=null; }
@@ -489,6 +490,7 @@ window.__startSyntheticCall=(video)=>{ const tracks=[]; const AC=window.AudioCon
 const incoming=new Map(); window.__lastRecv=null; window.__lastSent=null;
 async function handleDC(m){
   if(m.t==='hs'){ try{ await handleHandshake(await aesUnwrap(m)); }catch(err){ console.error('hs',err); } }
+  else if(m.t==='bye'){ hangup(false); }                 // Gegenseite hat aufgelegt
   else if(m.t==='msg'){ addTextBubble('them',await unsealText(m),'empfangen · verschlüsselt ✓'); }
   else if(m.t==='meta'){ incoming.set(m.id,{meta:m,parts:new Array(m.total),got:0,bubble:addMediaBubble('them',m,true)}); }
   else if(m.t==='chunk'){ const rec=incoming.get(m.id); if(!rec) return; rec.parts[m.i]=await unsealChunk(m); rec.got++;
@@ -585,7 +587,7 @@ $('back').onclick=()=>{ try{ pc&&pc.close(); ws&&ws.close(); }catch(_){} session
 $('send').onclick=sendChat; $('in').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat();});
 $('attach').onclick=()=>$('file').click();
 $('file').onchange=e=>{ const f=e.target.files[0]; if(!f) return; sendFileLike(f,f.type.startsWith('image/')?'image':'file'); e.target.value=''; };
-$('recBtn').onclick=toggleRec; $('callAudio').onclick=()=>startCall(false); $('callVideo').onclick=()=>startCall(true); $('hangup').onclick=hangup;
+$('recBtn').onclick=toggleRec; $('callAudio').onclick=()=>startCall(false); $('callVideo').onclick=()=>startCall(true); $('hangup').onclick=()=>hangup();
 $('btnAccept').onclick=acceptCall; $('btnMute').onclick=toggleMute; $('btnCam').onclick=toggleCam;
 window.__sendRandom=async(n,kind='image',mime='image/png')=>sendBytes(crypto.getRandomValues(new Uint8Array(n)),kind,'test.png',mime);
 // Test-Hooks

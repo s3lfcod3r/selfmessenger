@@ -301,6 +301,7 @@ private fun ChatScreen(me: Me, contact: Contact, onBack: () -> Unit) {
         conn.onMedia = { fromMe, kind, name, mime, bytes -> messages.add(ChatItem(fromMe, media = MediaData(kind, name, mime, bytes))) }
         conn.onIncomingCall = { video -> if (call == null) call = CallUi(video = video, incoming = true) else if (video) call = call!!.copy(video = true) }
         conn.onCallConnected = { call = call?.copy(incoming = false) }
+        conn.onCallEnded = { call = null; localVideo = null; remoteVideo = null }
         conn.start()
         onDispose { conn.close() }
     }
