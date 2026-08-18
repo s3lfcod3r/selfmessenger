@@ -1,7 +1,17 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+// Release-Signatur aus keystore.properties (im Projekt-Root, gitignored). Fehlt sie,
+// signiert der Release-Build mit dem Debug-Keystore (Fallback).
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) load(FileInputStream(keystorePropsFile))
 }
 
 android {
@@ -11,8 +21,8 @@ android {
         applicationId = "com.selfmessenger.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.1"
     }
     signingConfigs {
         // Android-Standard-Debug-Keystore aus der Toolchain (Passwort "android" ist kein Secret).
@@ -22,9 +32,20 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        if (keystorePropsFile.exists()) {
+            create("release") {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
     }
     buildTypes {
-        release { isMinifyEnabled = false; signingConfig = signingConfigs.getByName("self") }
+        release {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("self")
+        }
         debug { signingConfig = signingConfigs.getByName("self") }
     }
     lint { checkReleaseBuilds = false; abortOnError = false }

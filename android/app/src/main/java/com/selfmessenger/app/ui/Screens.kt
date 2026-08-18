@@ -35,6 +35,8 @@ import com.selfmessenger.app.vpn.VpnManager
 import com.selfmessenger.app.vpn.VpnStore
 import android.Manifest
 import android.content.pm.PackageManager
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -104,53 +106,88 @@ private fun MainScreen(me: Me, onOpenChat: (Contact) -> Unit, onOpenVpn: () -> U
     val qr = remember(payload) { Qr.bitmap(payload, 480).asImageBitmap() }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
-        Text("Meine Identität", style = MaterialTheme.typography.titleMedium)
+        // Kopf
+        Text("SelfMessenger", style = MaterialTheme.typography.titleLarge)
         Text("${me.name} · 🔑 ${Identity.fingerprint(me.pubB64)}",
-            fontFamily = FontFamily.Monospace, fontSize = 12.sp)
-        Spacer(Modifier.height(10.dp))
-        OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name") }, singleLine = true)
-        Button(onClick = { Identity.setName(ctx, name) }) { Text("Speichern") }
+            fontFamily = FontFamily.Monospace, fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
 
-        Spacer(Modifier.height(8.dp))
-        OutlinedButton(onClick = onOpenVpn) { Text("🔒 VPN (IP verstecken)") }
+        Spacer(Modifier.height(18.dp))
+
+        // Dein Code — QR + Teilen/Kopieren
+        Text("Dein Pairing-Code", style = MaterialTheme.typography.titleMedium)
+        Text("Freund scannt den QR – oder schick ihm den Code.",
+            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(10.dp))
+        Surface(color = Color.White, shape = RoundedCornerShape(12.dp)) {
+            Image(bitmap = qr, contentDescription = "QR-Code", modifier = Modifier.padding(10.dp).size(200.dp))
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(onClick = { shareCode(ctx, payload) }, modifier = Modifier.weight(1f)) { Text("📤 Teilen") }
+            OutlinedButton(onClick = { copyCode(ctx, payload) }, modifier = Modifier.weight(1f)) { Text("⧉ Kopieren") }
+        }
 
         Spacer(Modifier.height(16.dp))
-        Text("Dein Pairing-Code (persönlich zeigen)")
-        Spacer(Modifier.height(6.dp))
-        Image(bitmap = qr, contentDescription = "QR-Code", modifier = Modifier.size(200.dp))
+        OutlinedTextField(value = name, onValueChange = { name = it },
+            label = { Text("Dein Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            TextButton(onClick = { Identity.setName(ctx, name) }) { Text("Name speichern") }
+            TextButton(onClick = onOpenVpn) { Text("🔒 VPN") }
+        }
 
-        Spacer(Modifier.height(20.dp)); HorizontalDivider(); Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp)); HorizontalDivider(); Spacer(Modifier.height(16.dp))
 
-        Text("Freund hinzufügen (persönlich)", style = MaterialTheme.typography.titleMedium)
+        // Freund hinzufügen
+        Text("Freund hinzufügen", style = MaterialTheme.typography.titleMedium)
         OutlinedTextField(value = addCode, onValueChange = { addCode = it },
-            label = { Text("Pairing-Code einfügen") }, modifier = Modifier.fillMaxWidth())
+            label = { Text("Code des Freundes einfügen") }, modifier = Modifier.fillMaxWidth())
         Button(onClick = {
             if (Contacts.addFromPayload(ctx, addCode)) { addCode = ""; contacts = Contacts.all(ctx) }
-        }) { Text("Als Freund speichern") }
-
-        Spacer(Modifier.height(8.dp))
-        Text("📲 Oder haltet die Handys aneinander (NFC) — der Code wird automatisch übernommen.",
+        }, modifier = Modifier.fillMaxWidth()) { Text("Als Freund speichern") }
+        Spacer(Modifier.height(6.dp))
+        Text("📲 Oder haltet die Handys aneinander (NFC).",
             fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(20.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Kontakte (antippen zum Verbinden)", style = MaterialTheme.typography.titleMedium)
+            Text("Kontakte", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.weight(1f))
-            TextButton(onClick = { contacts = Contacts.all(ctx) }) { Text("🔄") }
+            TextButton(onClick = { contacts = Contacts.all(ctx) }) { Text("↻") }
         }
         if (contacts.isEmpty()) {
-            Text("Noch keine Freunde. Tauscht eure Codes persönlich aus.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Noch keine Freunde. Tippe „Teilen“ und tauscht eure Codes.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
         }
         contacts.forEach { c ->
-            Column(Modifier.fillMaxWidth().clickable { onOpenChat(c) }.padding(vertical = 8.dp)) {
-                Text(c.name)
-                Text("🔑 ${Identity.fingerprint(c.pubB64)}",
-                    fontFamily = FontFamily.Monospace, fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth().clickable { onOpenChat(c) }.padding(vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(c.name)
+                    Text("🔑 ${Identity.fingerprint(c.pubB64)}",
+                        fontFamily = FontFamily.Monospace, fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text("›", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 20.sp)
             }
         }
     }
+}
+
+/** Pairing-Code über die Android-Teilen-Funktion verschicken (WhatsApp, Signal …). */
+private fun shareCode(ctx: android.content.Context, code: String) {
+    val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(android.content.Intent.EXTRA_TEXT, "Verbinde dich mit mir auf SelfMessenger. Mein Code:\n\n$code")
+    }
+    ctx.startActivity(android.content.Intent.createChooser(send, "Code teilen"))
+}
+
+/** Pairing-Code in die Zwischenablage. */
+private fun copyCode(ctx: android.content.Context, code: String) {
+    val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+    cm.setPrimaryClip(android.content.ClipData.newPlainText("SelfMessenger", code))
+    android.widget.Toast.makeText(ctx, "Code kopiert", android.widget.Toast.LENGTH_SHORT).show()
 }
 
 @Composable

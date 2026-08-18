@@ -27,8 +27,48 @@
   .wordmark .self{color:var(--ice)}.wordmark .name{color:var(--a)}
   .sub{color:var(--muted);font-size:13px;margin:0 0 16px}
   .sub.intro{text-align:center;max-width:420px;margin:0 auto 18px}
-  .legal-footer{text-align:center;font-size:12px;color:var(--muted);margin:16px 0 0}
+  .legal-footer{text-align:center;font-size:12px;color:var(--muted);margin:22px 0 0}
   .legal-footer a{color:var(--muted);text-decoration:none}.legal-footer a:hover{color:var(--a)}
+  /* ---- Setup: aufgeräumt, mobil-first ---- */
+  .app-head{display:flex;align-items:center;gap:12px;padding:2px 2px 16px}
+  .head-logo{width:42px;height:42px;flex:0 0 auto}
+  .head-id{display:flex;flex-direction:column;line-height:1.25;min-width:0}
+  .head-id .wordmark{font-size:18px}
+  .head-me{font-family:var(--mono);font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .head-me b{color:var(--ink);font-weight:600}
+  .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .action{display:flex;align-items:center;justify-content:center;gap:8px;height:54px;border-radius:14px;
+    background:var(--panel);border:1px solid var(--line);color:var(--ink);font-size:15px;font-weight:600;cursor:pointer;transition:.15s}
+  .action .ic{font-size:18px}
+  .action:hover{border-color:var(--a2)}
+  .action.on{background:#12241f;border-color:var(--a2);color:var(--a-bright)}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin:10px 0 4px}
+  .panel[hidden]{display:none}
+  .panel-h{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 12px}
+  .qr-wrap{background:#fff;border-radius:14px;padding:12px;width:max-content;max-width:100%;margin:0 auto;line-height:0}
+  .qr-wrap img{display:block;image-rendering:pixelated;width:min(232px,62vw);height:auto}
+  .hint{font-size:12.5px;color:var(--muted);margin:12px 0 10px;text-align:center;line-height:1.45}
+  .share-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .btn-primary{height:48px;border:none;border-radius:13px;background:var(--a);color:#04120d;font-weight:700;font-size:15px;cursor:pointer}
+  .btn-primary:hover{background:var(--a-bright)}.btn-primary.block{width:100%;margin-top:10px}
+  .btn-ghost{height:48px;border:1px solid var(--line);border-radius:13px;background:#0c1620;color:var(--ink);font-weight:600;font-size:15px;cursor:pointer}
+  .btn-ghost:hover{border-color:var(--a2)}
+  .code-field{width:100%;margin-top:12px;background:#0c1620;border:1px solid var(--line);border-radius:11px;
+    padding:10px 12px;color:var(--muted);font-family:var(--mono);font-size:11px}
+  .rename{display:flex;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+  .rename input{flex:1;min-width:0}
+  .contacts-h{display:flex;align-items:center;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:20px 2px 8px}
+  .refresh{margin-left:auto;background:none;border:none;color:var(--muted);font-size:17px;cursor:pointer;height:auto;padding:0 6px;line-height:1}
+  .refresh:hover{color:var(--a)}
+  .contact{display:flex;align-items:center;gap:12px;padding:13px 14px;background:var(--panel);
+    border:1px solid var(--line);border-radius:13px;margin-top:8px;cursor:pointer;transition:.15s}
+  .contact:hover{border-color:var(--a2);background:#12241f}
+  .contact .avatar{width:36px;height:36px;flex:0 0 auto;border-radius:50%;background:#0c1620;border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;color:var(--a);font-weight:700;font-size:15px}
+  .contact .info{min-width:0;flex:1}
+  .contact .info .nm{font-size:15px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .contact .info .fp{font-family:var(--mono);font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .contact .chev{color:var(--muted);font-size:20px;flex:0 0 auto}
   .card{background:linear-gradient(180deg,var(--panel),#0d141d);border:1px solid var(--line);
     border-radius:16px;padding:16px;margin-bottom:12px}
   .card h2{font-size:13px;margin:0 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
@@ -80,33 +120,43 @@
 <div class="wrap">
   <!-- ===== SETUP / KONTAKTE ===== -->
   <div id="setupScreen">
-    <img class="brand-logo" src="brand/logo.png" alt="SelfMessenger" />
-    <p class="sub intro">Serverlos & Ende-zu-Ende-verschlüsselt. Freunde nur persönlich verbinden (QR/NFC) — danach findet ihr euch verschlüsselt wieder.</p>
-
-    <div class="card">
-      <h2>Meine Identität</h2>
-      <p class="me-line" id="meLine">…</p>
-      <div class="row"><input type="text" id="nameInput" placeholder="Dein Name" /><button id="saveName" class="ghost">Speichern</button></div>
-      <div class="qr">
-        <div class="box"><div id="qr"></div></div>
-        <div style="flex:1">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Dein Pairing-Code (zeig ihn dem Freund):</div>
-          <textarea id="myCode" readonly rows="3"></textarea>
-          <button id="copyCode" class="ghost" style="margin-top:6px;height:34px">Code kopieren</button>
-        </div>
+    <header class="app-head">
+      <img class="head-logo" src="brand/shield.png" alt="" />
+      <div class="head-id">
+        <span class="wordmark"><span class="self">Self</span><span class="name">Messenger</span></span>
+        <span class="head-me" id="meLine">…</span>
       </div>
+    </header>
+
+    <div class="actions">
+      <button class="action" id="btnMyCode"><span class="ic">📤</span>Mein Code</button>
+      <button class="action" id="btnAddFriend"><span class="ic">➕</span>Freund</button>
     </div>
 
-    <div class="card">
-      <h2>Freund hinzufügen (persönlich)</h2>
-      <textarea id="addCode" placeholder="Pairing-Code des Freundes hier einfügen (per QR-Scan / NFC / Kopieren)"></textarea>
-      <button id="addBtn" style="margin-top:8px">Als Freund speichern</button>
-    </div>
+    <section class="panel" id="panelMyCode" hidden>
+      <div class="panel-h">Dein Pairing-Code</div>
+      <div class="qr-wrap"><div id="qr"></div></div>
+      <p class="hint">Freund scannt den QR — oder schick ihm den Code:</p>
+      <div class="share-row">
+        <button class="btn-primary" id="shareCode">📤 Teilen</button>
+        <button class="btn-ghost" id="copyCode">⧉ Kopieren</button>
+      </div>
+      <input type="text" id="myCode" class="code-field" readonly />
+      <div class="rename">
+        <input type="text" id="nameInput" placeholder="Dein Name" />
+        <button class="btn-ghost" id="saveName">Name speichern</button>
+      </div>
+    </section>
 
-    <div class="card">
-      <h2>Kontakte</h2>
-      <div id="contacts"><div class="empty">Noch keine Freunde. Tauscht eure Codes persönlich aus.</div></div>
-    </div>
+    <section class="panel" id="panelAddFriend" hidden>
+      <div class="panel-h">Freund hinzufügen</div>
+      <textarea id="addCode" placeholder="Code des Freundes hier einfügen"></textarea>
+      <button class="btn-primary block" id="addBtn">Als Freund speichern</button>
+      <p class="hint">📲 Oder haltet eure Handys aneinander (NFC) — der Code wird automatisch übernommen.</p>
+    </section>
+
+    <div class="contacts-h">Kontakte<button class="refresh" id="refreshBtn" title="Aktualisieren">↻</button></div>
+    <div id="contacts"><div class="empty">Noch keine Freunde.<br />Tippe <b>„Freund"</b> und tauscht eure Codes.</div></div>
 
     <p class="legal-footer">
       <a href="/impressum">Impressum</a> · <a href="/datenschutz">Datenschutz</a>
@@ -170,7 +220,8 @@ async function loadOrCreateIdentity(){
 function setName(n){ identity.name=n||identity.name;
   localStorage.setItem('sm_identity_'+PROFILE,JSON.stringify({name:identity.name,pub:identity.pubB64,priv:identity.jwk})); }
 function myPayload(){ return utf8b64(JSON.stringify({n:identity.name,k:identity.pubB64})); }
-function decodePayload(s){ try{ const o=JSON.parse(b64utf8(s.trim())); if(o.k&&o.n) return o; }catch(_){} return null; }
+function extractCode(s){ const m=(s||'').match(/[A-Za-z0-9+/=]{16,}/g); return m?m.sort((a,b)=>b.length-a.length)[0]:(s||'').trim(); }
+function decodePayload(s){ try{ const o=JSON.parse(b64utf8(extractCode(s))); if(o.k&&o.n) return o; }catch(_){} return null; }
 async function fpOf(pubB64){ const d=await crypto.subtle.digest('SHA-256',fromB64(pubB64)); return hex(d).slice(0,12).match(/.{1,4}/g).join(' '); }
 
 // ===== Kontakte =====
@@ -182,13 +233,15 @@ function addContactFromCode(code){ const o=decodePayload(code); if(!o){ alert('U
   renderContacts(); return true; }
 async function renderContacts(){
   const cs=loadContacts(), el=$('contacts');
-  if(!cs.length){ el.innerHTML='<div class="empty">Noch keine Freunde. Tauscht eure Codes persönlich aus.</div>'; return; }
+  if(!cs.length){ el.innerHTML='<div class="empty">Noch keine Freunde.<br />Tippe <b>„Freund"</b> und tauscht eure Codes.</div>'; return; }
   el.innerHTML='';
   for(const c of cs){ const fp=await fpOf(c.k);
-    const row=document.createElement('div'); row.className='contact';
-    row.innerHTML='<div class="info">'+c.n.replace(/</g,'&lt;')+'<div class="fp">🔑 '+fp+'</div></div>';
-    const btn=document.createElement('button'); btn.textContent='Verbinden'; btn.onclick=()=>connectToContact(c);
-    row.appendChild(btn); el.appendChild(row); }
+    const nm=(c.n||'?').replace(/</g,'&lt;'); const initial=(c.n||'?').trim().charAt(0).toUpperCase()||'?';
+    const row=document.createElement('div'); row.className='contact'; row.title='Mit '+nm+' verbinden';
+    row.innerHTML='<div class="avatar">'+initial+'</div>'+
+      '<div class="info"><div class="nm">'+nm+'</div><div class="fp">🔑 '+fp+'</div></div>'+
+      '<div class="chev">›</div>';
+    row.onclick=()=>connectToContact(c); el.appendChild(row); }
 }
 
 // ===== Rendezvous + Session aus Identitäten (MITM-sicher) =====
@@ -392,11 +445,30 @@ async function toggleRec(){ if(mediaRec&&mediaRec.state==='recording'){ mediaRec
 // ===== UI-Verdrahtung =====
 function renderIdentity(){ $('meLine').innerHTML='<b>'+identity.name.replace(/</g,'&lt;')+'</b>';
   $('nameInput').value=identity.name; $('myCode').value=myPayload();
-  const qr=qrcode(0,'M'); qr.addData(myPayload()); qr.make(); $('qr').innerHTML=qr.createImgTag(3,0);
+  const qr=qrcode(0,'M'); qr.addData(myPayload()); qr.make(); $('qr').innerHTML=qr.createImgTag(6,0);
   fpOf(identity.pubB64).then(fp=>{ $('meLine').innerHTML='<b>'+identity.name.replace(/</g,'&lt;')+'</b> · 🔑 '+fp; }); }
+function togglePanel(which){
+  const mc=$('panelMyCode'), af=$('panelAddFriend');
+  const showMc=which==='mycode'&&mc.hidden, showAf=which==='addfriend'&&af.hidden;
+  mc.hidden=!showMc; af.hidden=!showAf;
+  $('btnMyCode').classList.toggle('on',showMc); $('btnAddFriend').classList.toggle('on',showAf);
+}
+async function copyMyCode(btnId,label){
+  const code=myPayload();
+  try{ await navigator.clipboard.writeText(code); }catch(_){ $('myCode').select(); try{document.execCommand('copy');}catch(e){} }
+  $(btnId).textContent='kopiert ✓'; setTimeout(()=>$(btnId).textContent=label,1400);
+}
+$('btnMyCode').onclick=()=>togglePanel('mycode');
+$('btnAddFriend').onclick=()=>togglePanel('addfriend');
+$('refreshBtn').onclick=()=>renderContacts();
 $('saveName').onclick=()=>{ setName($('nameInput').value.trim()); renderIdentity(); };
-$('copyCode').onclick=()=>{ $('myCode').select(); try{ document.execCommand('copy'); }catch(_){} $('copyCode').textContent='kopiert ✓'; setTimeout(()=>$('copyCode').textContent='Code kopieren',1200); };
-$('addBtn').onclick=()=>{ if(addContactFromCode($('addCode').value)) $('addCode').value=''; };
+$('copyCode').onclick=()=>copyMyCode('copyCode','⧉ Kopieren');
+$('shareCode').onclick=async()=>{
+  const msg='Verbinde dich mit mir auf SelfMessenger. Mein Code:\n\n'+myPayload();
+  if(navigator.share){ try{ await navigator.share({title:'SelfMessenger',text:msg}); return; }catch(err){ if(err&&err.name==='AbortError') return; } }
+  copyMyCode('shareCode','📤 Teilen');
+};
+$('addBtn').onclick=()=>{ if(addContactFromCode($('addCode').value)){ $('addCode').value=''; togglePanel(null); } };
 $('back').onclick=()=>{ try{ pc&&pc.close(); ws&&ws.close(); }catch(_){} session=null;
   $('chatScreen').style.display='none'; $('setupScreen').style.display='block'; renderContacts(); };
 $('send').onclick=sendChat; $('in').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat();});

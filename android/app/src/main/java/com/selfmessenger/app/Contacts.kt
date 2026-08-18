@@ -30,7 +30,9 @@ object Contacts {
 
     /** Fügt einen Freund aus seinem Pairing-Code hinzu. Gibt false bei ungültigem Code zurück. */
     fun addFromPayload(ctx: Context, code: String): Boolean {
-        val o = try { JSONObject(String(Identity.b64d(code.trim()), Charsets.UTF_8)) }
+        // Toleriert Code mit Text drumherum (z.B. aus einer geteilten Nachricht): längsten Base64-Block nehmen.
+        val token = Regex("[A-Za-z0-9+/=]{16,}").findAll(code).map { it.value }.maxByOrNull { it.length } ?: code.trim()
+        val o = try { JSONObject(String(Identity.b64d(token), Charsets.UTF_8)) }
                 catch (e: Exception) { return false }
         if (!o.has("k") || !o.has("n")) return false
         val list = all(ctx).toMutableList()
