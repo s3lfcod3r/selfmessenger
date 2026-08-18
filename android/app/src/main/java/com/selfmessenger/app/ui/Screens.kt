@@ -40,7 +40,10 @@ import com.selfmessenger.app.Contact
 import com.selfmessenger.app.Contacts
 import com.selfmessenger.app.Identity
 import com.selfmessenger.app.Me
+import com.selfmessenger.app.MessageStore
 import com.selfmessenger.app.Qr
+import com.selfmessenger.app.Settings
+import com.selfmessenger.app.StoredMsg
 import com.selfmessenger.app.media.VoicePlayer
 import com.selfmessenger.app.media.VoiceRecorder
 import com.selfmessenger.app.net.Connection
@@ -106,11 +109,15 @@ private fun LockScreen(onUnlockClick: () -> Unit) {
 private fun MainNav(onPrepareVpn: ((Boolean) -> Unit) -> Unit) {
     val ctx = LocalContext.current
     val me = remember { Identity.load(ctx) }
-    var screen by remember { mutableStateOf("chats") }   // chats | mycode | add | vpn
+    var screen by remember { mutableStateOf("chats") }   // chats | mycode | add | settings | vpn
     var chatWith by remember { mutableStateOf<Contact?>(null) }
 
     DisposableEffect(Unit) {
         val mbx = MailboxClient(ctx.applicationContext, me, Config.SIGNALING_URL) { from, text ->
+            // Offline-Nachricht: in den Verlauf des passenden Kontakts legen (falls Speichern an) + Hinweis.
+            val c = Contacts.all(ctx).firstOrNull { it.name == from }
+            if (c != null && Settings.saveHistoryFor(ctx, c.pubB64))
+                MessageStore.append(ctx, c.pubB64, StoredMsg(false, text, null, nowTime()))
             Toast.makeText(ctx, "📨 $from: $text", Toast.LENGTH_LONG).show()
         }
         mbx.start(); onDispose { mbx.stop() }
@@ -121,12 +128,13 @@ private fun MainNav(onPrepareVpn: ((Boolean) -> Unit) -> Unit) {
         target != null -> ChatScreen(me, target) { chatWith = null }
         screen == "mycode" -> MyCodeScreen(me) { screen = "chats" }
         screen == "add" -> AddFriendScreen { screen = "chats" }
-        screen == "vpn" -> VpnScreen(onPrepareVpn) { screen = "chats" }
+        screen == "settings" -> SettingsScreen(onVpn = { screen = "vpn" }) { screen = "chats" }
+        screen == "vpn" -> VpnScreen(onPrepareVpn) { screen = "settings" }
         else -> ChatsScreen(me,
             onOpenChat = { chatWith = it },
             onMyCode = { screen = "mycode" },
             onAddFriend = { screen = "add" },
-            onVpn = { screen = "vpn" })
+            onSettings = { screen = "settings" })
     }
 }
 
@@ -164,15 +172,15 @@ private fun TopBar(onBack: (() -> Unit)? = null, content: @Composable RowScope.(
 // ================= Chats (Start) =================
 
 @Composable
-private fun ChatsScreen(me: Me, onOpenChat: (Contact) -> Unit, onMyCode: () -> Unit, onAddFriend: () -> Unit, onVpn: () -> Unit) {
+private fun ChatsScreen(me: Me, onOpenChat: (Contact) -> Unit, onMyCode: () -> Unit, onAddFriend: () -> Unit, onSettings: () -> Unit) {
     val ctx = LocalContext.current
     val contacts = remember { Contacts.all(ctx) }
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             TopBar {
                 Box(Modifier.weight(1f)) { Wordmark(19) }
-                IconButton(onClick = onVpn) { Text("🔒", fontSize = 19.sp) }
                 IconButton(onClick = onMyCode) { Text("🔗", fontSize = 19.sp) }
+                IconButton(onClick = onSettings) { Text("⚙️", fontSize = 19.sp) }
             }
             if (contacts.isEmpty()) {
                 Column(Modifier.fillMaxSize().padding(28.dp), Arrangement.Center, Alignment.CenterHorizontally) {
@@ -199,6 +207,65 @@ private fun ChatsScreen(me: Me, onOpenChat: (Contact) -> Unit, onMyCode: () -> U
             onClick = onAddFriend, containerColor = SelfTeal, contentColor = OnTeal,
             modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp)
         ) { Text("+", fontSize = 28.sp) }
+    }
+}
+
+// ================= Einstellungen =================
+
+@Composable
+private fun SettingsScreen(onVpn: () -> Unit, onBack: () -> Unit) {
+    val ctx = LocalContext.current
+    var saveHist by remember { mutableStateOf(Settings.saveHistoryGlobal(ctx)) }
+    var offlineMbx by remember { mutableStateOf(Settings.offlineMailboxGlobal(ctx)) }
+    Column(Modifier.fillMaxSize()) {
+        TopBar(onBack) { Text("Einstellungen", fontSize = 18.sp, fontWeight = FontWeight.SemiBold) }
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 8.dp)) {
+            SectionLabel("Nachrichten")
+            ToggleRow("Chatverlauf lokal speichern", "Gespräche bleiben (verschlüsselt) auf dem Gerät.", saveHist) {
+                saveHist = it; Settings.setSaveHistoryGlobal(ctx, it)
+            }
+            ToggleRow("Offline-Nachrichten zwischenlagern", "Wenn der Partner offline ist, wird die Nachricht verschlüsselt beim Kuppler gepuffert.", offlineMbx) {
+                offlineMbx = it; Settings.setOfflineMailboxGlobal(ctx, it)
+            }
+            Text("Standard für neue Chats. Pro Chat lässt sich das im Chat oben über ⋮ überschreiben.",
+                color = SelfMuted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+
+            SectionLabel("Netzwerk")
+            NavRow("VPN (WireGuard)", "Eigene IP verstecken (Mullvad-Konfiguration einfügen).", onVpn)
+
+            SectionLabel("Sicherheit")
+            Text("Alle Inhalte sind Ende-zu-Ende verschlüsselt und laufen direkt Gerät-zu-Gerät. Der Server sieht nie deine Nachrichten.",
+                color = SelfMuted, fontSize = 12.sp, modifier = Modifier.padding(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(text.uppercase(), color = SelfTeal, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp))
+}
+
+@Composable
+private fun ToggleRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 15.sp, color = SelfText)
+            Text(subtitle, fontSize = 12.sp, color = SelfMuted)
+        }
+        Switch(checked = checked, onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(checkedThumbColor = OnTeal, checkedTrackColor = SelfTeal))
+    }
+}
+
+@Composable
+private fun NavRow(title: String, subtitle: String, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 15.sp, color = SelfText)
+            Text(subtitle, fontSize = 12.sp, color = SelfMuted)
+        }
+        Text("›", fontSize = 22.sp, color = SelfMuted)
     }
 }
 
@@ -265,13 +332,24 @@ private fun ChatScreen(me: Me, contact: Contact, onBack: () -> Unit) {
     var localVideo by remember { mutableStateOf<VideoTrack?>(null) }
     var remoteVideo by remember { mutableStateOf<VideoTrack?>(null) }
     var call by remember { mutableStateOf<CallUi?>(null) }
-    val messages = remember { mutableStateListOf<ChatItem>() }
+    var showMenu by remember { mutableStateOf(false) }
+    // Verlauf beim Öffnen laden (falls Speichern für diesen Kontakt an ist)
+    val messages = remember {
+        mutableStateListOf<ChatItem>().also { list ->
+            if (Settings.saveHistoryFor(ctx, contact.pubB64))
+                MessageStore.load(ctx, contact.pubB64).forEach { list.add(ChatItem(it.fromMe, text = it.text ?: it.label, time = it.time)) }
+        }
+    }
     val listState = rememberLazyListState()
+    fun persist(item: ChatItem, label: String?) {
+        if (Settings.saveHistoryFor(ctx, contact.pubB64))
+            MessageStore.append(ctx, contact.pubB64, StoredMsg(item.fromMe, item.text, label, item.time))
+    }
 
     val conn = remember {
         Connection(ctx.applicationContext, me, contact, Config.SIGNALING_URL,
             onStatus = { status = it },
-            onMessage = { fromMe, text -> messages.add(ChatItem(fromMe, text = text)) })
+            onMessage = { fromMe, text -> val item = ChatItem(fromMe, text = text); messages.add(item); persist(item, null) })
     }
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) readPicked(ctx, uri)?.let { (n, mime, b) -> conn.sendMedia("image", n, mime, b) }
@@ -298,7 +376,7 @@ private fun ChatScreen(me: Me, contact: Contact, onBack: () -> Unit) {
     DisposableEffect(conn) {
         conn.onLocalVideo = { localVideo = it }
         conn.onRemoteVideo = { remoteVideo = it }
-        conn.onMedia = { fromMe, kind, name, mime, bytes -> messages.add(ChatItem(fromMe, media = MediaData(kind, name, mime, bytes))) }
+        conn.onMedia = { fromMe, kind, name, mime, bytes -> val item = ChatItem(fromMe, media = MediaData(kind, name, mime, bytes)); messages.add(item); persist(item, mediaLabel(kind, name)) }
         conn.onIncomingCall = { video -> if (call == null) call = CallUi(video = video, incoming = true) else if (video) call = call!!.copy(video = true) }
         conn.onCallConnected = { call = call?.copy(incoming = false) }
         conn.onCallEnded = { call = null; localVideo = null; remoteVideo = null }
@@ -317,7 +395,9 @@ private fun ChatScreen(me: Me, contact: Contact, onBack: () -> Unit) {
             }
             IconButton(onClick = { withCallPerms(false) { call = CallUi(false, false); conn.startCall(false) } }) { Text("📞", fontSize = 18.sp) }
             IconButton(onClick = { withCallPerms(true) { call = CallUi(true, false); conn.startCall(true) } }) { Text("📹", fontSize = 18.sp) }
+            IconButton(onClick = { showMenu = true }) { Text("⋮", fontSize = 22.sp, color = SelfText) }
         }
+        if (showMenu) ContactSettingsDialog(contact, onClearHistory = { MessageStore.clear(ctx, contact.pubB64); messages.clear() }) { showMenu = false }
         // Nachrichten
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, contentPadding = PaddingValues(vertical = 8.dp)) {
             items(messages) { item -> MessageBubble(item) }
@@ -379,6 +459,51 @@ private fun MediaContent(m: MediaData) {
         }
         else -> Text("📎 ${m.name}", color = SelfText)
     }
+}
+
+private fun mediaLabel(kind: String, name: String): String = when (kind) {
+    "image" -> "🖼 Bild"
+    "voice" -> "🎤 Sprachnachricht"
+    else -> "📎 $name"
+}
+
+@Composable
+private fun ContactSettingsDialog(contact: Contact, onClearHistory: () -> Unit, onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
+    var hist by remember { mutableStateOf(Settings.saveHistoryFor(ctx, contact.pubB64)) }
+    var mbx by remember { mutableStateOf(Settings.offlineMailboxFor(ctx, contact.pubB64)) }
+    val hasOverride = Settings.historyOverride(ctx, contact.pubB64) != null || Settings.mailboxOverride(ctx, contact.pubB64) != null
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Fertig") } },
+        dismissButton = {
+            TextButton(onClick = {
+                Settings.setHistoryOverride(ctx, contact.pubB64, null); Settings.setMailboxOverride(ctx, contact.pubB64, null)
+                hist = Settings.saveHistoryFor(ctx, contact.pubB64); mbx = Settings.offlineMailboxFor(ctx, contact.pubB64)
+            }, enabled = hasOverride) { Text("Auf Standard") }
+        },
+        title = { Text(contact.name) },
+        text = {
+            Column {
+                Text("Nur für diesen Chat (überschreibt die globale Einstellung).", color = SelfMuted, fontSize = 12.sp)
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Chatverlauf speichern", Modifier.weight(1f), color = SelfText)
+                    Switch(checked = hist, onCheckedChange = { hist = it; Settings.setHistoryOverride(ctx, contact.pubB64, it) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = OnTeal, checkedTrackColor = SelfTeal))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Offline zwischenlagern", Modifier.weight(1f), color = SelfText)
+                    Switch(checked = mbx, onCheckedChange = { mbx = it; Settings.setMailboxOverride(ctx, contact.pubB64, it) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = OnTeal, checkedTrackColor = SelfTeal))
+                }
+                Spacer(Modifier.height(4.dp))
+                TextButton(onClick = { onClearHistory() }, contentPadding = PaddingValues(0.dp)) {
+                    Text("🗑 Verlauf dieses Chats löschen", color = Color(0xFFE5484D))
+                }
+            }
+        }
+    )
 }
 
 // ================= Anruf (Vollbild) =================

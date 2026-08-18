@@ -100,6 +100,10 @@ class Connection(
             rtc?.sendText(JSONObject().put("t", "msg").put("iv", iv).put("ct", ct).toString())
             ui { onMessage(true, text) }
         } else if (signaling != null) {                   // Partner offline: verschlüsselt in den Briefkasten
+            if (!com.selfmessenger.app.Settings.offlineMailboxFor(ctx, contact.pubB64)) {
+                ui { onMessage(true, "$text  ✗ (nicht zugestellt – Person offline, Zwischenlagern aus)") }
+                return
+            }
             val s = CryptoSession.derive(me.privateKey, contact.pubB64)
             val (iv, ct) = s.encrypt(text.toByteArray(Charsets.UTF_8))
             val blob = JSONObject().put("iv", iv).put("ct", ct)
