@@ -8,8 +8,14 @@ import com.selfmessenger.app.AckBus
 import com.selfmessenger.app.AppState
 import com.selfmessenger.app.Contact
 import com.selfmessenger.app.Contacts
+import com.selfmessenger.app.MediaFiles
 import com.selfmessenger.app.Me
+import com.selfmessenger.app.MessageStore
+import com.selfmessenger.app.OfflineMedia
+import com.selfmessenger.app.OfflineMediaBus
 import com.selfmessenger.app.PendingRead
+import com.selfmessenger.app.Settings
+import com.selfmessenger.app.StoredMsg
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -69,24 +75,64 @@ class MailboxClient(
         }
     }
 
-    /** Umschlag: entweder echte Nachricht ({t:"m",id,body}) oder Status-Bestätigung ({t:"a",id,s}). */
+    private val mediaAcc = HashMap<String, MediaOff>()
+
+    /** Umschlag: Nachricht ({t:m}), Bestätigung ({t:a}) oder Medium ({t:mm} Meta / {t:mc} Häppchen). */
     private fun handleEnvelope(c: Contact, raw: String) {
         val env = try { JSONObject(raw) } catch (_: Exception) { JSONObject().put("t", "m").put("body", raw) }
-        if (env.optString("t") == "a") {                   // Bestätigung für eine von MIR gesendete Nachricht
-            val id = env.optString("id"); val s = env.optString("s")
-            if (id.isNotEmpty()) AckBus.emit(c.pubB64, id, if (s == "r") "read" else "delivered")
-            return
-        }
-        // echte Nachricht
-        val id = env.optString("id", "")
-        val body = if (env.has("body")) env.getString("body") else raw
-        main.post { onOfflineMessage(c.name, body) }
-        if (id.isNotEmpty()) {                             // zugestellt bestätigen; gelesen, wenn dieser Chat offen ist
-            MailboxPost.sendAckAsync(me, baseUrl, c.pubB64, id, "d")
-            if (AppState.openChatPub == c.pubB64) MailboxPost.sendAckAsync(me, baseUrl, c.pubB64, id, "r")
-            else PendingRead.add(c.pubB64, id)
+        when (env.optString("t")) {
+            "a" -> {                                       // Bestätigung für eine von MIR gesendete Nachricht
+                val id = env.optString("id"); val s = env.optString("s")
+                if (id.isNotEmpty()) AckBus.emit(c.pubB64, id, if (s == "r") "read" else "delivered")
+            }
+            "mm" -> mediaAcc[env.getString("id")] =
+                MediaOff(env.getString("kind"), env.getString("name"), env.getString("mime"), env.getInt("total"))
+            "mc" -> {
+                val id = env.getString("id"); val acc = mediaAcc[id] ?: return
+                acc.parts[env.getInt("i")] = android.util.Base64.decode(env.getString("body"), android.util.Base64.NO_WRAP)
+                acc.got++
+                if (acc.got >= acc.total) { mediaAcc.remove(id); onOfflineMedia(c, id, acc) }
+            }
+            else -> {                                      // echte Textnachricht
+                val id = env.optString("id", "")
+                val body = if (env.has("body")) env.getString("body") else raw
+                main.post { onOfflineMessage(c.name, body) }
+                ackReceived(c.pubB64, id)
+            }
         }
     }
 
+    private fun onOfflineMedia(c: Contact, id: String, acc: MediaOff) {
+        val bytes = acc.assemble()
+        if (Settings.saveHistoryFor(ctx, c.pubB64)) {      // speichern, damit es beim Öffnen da ist
+            val fid = MediaFiles.save(ctx, bytes)
+            MessageStore.append(ctx, c.pubB64, StoredMsg(false, null, mediaLabel(acc.kind, acc.name), nowT(), null, null, fid, acc.kind, acc.name, acc.mime))
+        }
+        OfflineMediaBus.emit(OfflineMedia(c.pubB64, acc.kind, acc.name, acc.mime, bytes))   // offener Chat: live
+        ackReceived(c.pubB64, id)
+    }
+
+    private fun ackReceived(pub: String, id: String) {
+        if (id.isEmpty()) return
+        MailboxPost.sendAckAsync(me, baseUrl, pub, id, "d")           // zugestellt
+        if (AppState.openChatPub == pub) MailboxPost.sendAckAsync(me, baseUrl, pub, id, "r")  // gelesen (Chat offen)
+        else PendingRead.add(pub, id)
+    }
+
+    private fun mediaLabel(kind: String, name: String) = when (kind) { "image" -> "🖼 Bild"; "voice" -> "🎤 Sprachnachricht"; else -> "📎 $name" }
+    private fun nowT() = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
+
     fun stop() { ws?.close(1000, null); ws = null }
+
+    /** Sammelt offline empfangene Medien-Häppchen bis vollständig. */
+    private class MediaOff(val kind: String, val name: String, val mime: String, val total: Int) {
+        val parts = arrayOfNulls<ByteArray>(total)
+        var got = 0
+        fun assemble(): ByteArray {
+            val size = parts.sumOf { it?.size ?: 0 }
+            val out = ByteArray(size); var o = 0
+            for (p in parts) { if (p != null) { System.arraycopy(p, 0, out, o, p.size); o += p.size } }
+            return out
+        }
+    }
 }

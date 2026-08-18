@@ -16,7 +16,8 @@ export default {
       let body = null; try { body = await req.json(); } catch (_) {}
       if (!body || !body.mailbox || !body.blob) return new Response('bad request', { status: 400 });
       const stub = env.MAILBOX.get(env.MAILBOX.idFromName(body.mailbox));
-      await stub.fetch('https://mbx/enqueue', { method: 'POST', body: JSON.stringify(body.blob) });
+      // push!==false: Benachrichtigung auslösen (bei Medien-Chunks push:false, damit nur die Meta weckt)
+      await stub.fetch('https://mbx/enqueue', { method: 'POST', body: JSON.stringify({ blob: body.blob, push: body.push !== false }) });
       return new Response('ok');
     }
     return new Response('SelfMessenger signaling: ok', { status: 200 });
@@ -44,9 +45,9 @@ export class Room {
     }
     ws.addEventListener('message', (evt) => {
       let parsed = null; try { parsed = JSON.parse(evt.data); } catch (_) {}
-      if (parsed && parsed.type === 'store') {           // verschlüsselten Blob in den Briefkasten legen
+      if (parsed && parsed.type === 'store') {           // verschlüsselten Blob in den Briefkasten legen (Alt-Pfad)
         const stub = this.env.MAILBOX.get(this.env.MAILBOX.idFromName(parsed.mailbox));
-        stub.fetch('https://mbx/enqueue', { method: 'POST', body: JSON.stringify(parsed.blob) });
+        stub.fetch('https://mbx/enqueue', { method: 'POST', body: JSON.stringify({ blob: parsed.blob, push: true }) });
         return;
       }
       for (const peer of this.sessions) if (peer !== ws) { try { peer.send(evt.data); } catch (_) {} }
@@ -67,20 +68,27 @@ export class Mailbox {
   async fetch(req) {
     const url = new URL(req.url);
     if (url.pathname === '/enqueue') {
-      const blob = await req.json();
+      const body = await req.json();
+      const blob = body && body.blob ? body.blob : body;     // {blob,push} oder (alt) roher Blob
+      const doPush = !body || body.push !== false;
       if (this.ws) { try { this.ws.send(JSON.stringify({ type: 'mail', items: [blob] })); return new Response('sent'); } catch (_) {} }
-      const q = (await this.state.storage.get('q')) || [];
-      q.push(blob); await this.state.storage.put('q', q);
-      // Empfänger ist offline -> Push wecken (Inhaltslos; Text liegt verschlüsselt im Briefkasten).
-      const token = await this.state.storage.get('token');
-      if (token) { try { await sendPush(this.env, token); } catch (_) {} }
+      // Offline: jeden Eintrag als eigenen Key ablegen (umgeht das 128-KB-pro-Wert-Limit; große Bilder ok)
+      const seq = ((await this.state.storage.get('seq')) || 0) + 1;
+      await this.state.storage.put('seq', seq);
+      await this.state.storage.put('q:' + String(seq).padStart(9, '0'), blob);
+      if (doPush) { const token = await this.state.storage.get('token'); if (token) { try { await sendPush(this.env, token); } catch (_) {} } }
       return new Response('queued');
     }
     if (req.headers.get('Upgrade') !== 'websocket') return new Response('expected websocket', { status: 426 });
     const [client, server] = Object.values(new WebSocketPair());
     server.accept(); this.ws = server;
-    const q = (await this.state.storage.get('q')) || [];
-    if (q.length) { server.send(JSON.stringify({ type: 'mail', items: q })); await this.state.storage.delete('q'); }
+    const entries = await this.state.storage.list({ prefix: 'q:' });
+    if (entries.size) {
+      const items = [...entries.values()];
+      for (let i = 0; i < items.length; i += 20)             // in Häppchen senden (WS-Frame-Limit ~1 MB)
+        server.send(JSON.stringify({ type: 'mail', items: items.slice(i, i + 20) }));
+      await this.state.storage.delete([...entries.keys()]);
+    }
     server.addEventListener('message', async (evt) => {                 // Push-Token anmelden
       let m = null; try { m = JSON.parse(evt.data); } catch (_) {}
       if (m && m.type === 'pushtoken' && m.token) await this.state.storage.put('token', m.token);

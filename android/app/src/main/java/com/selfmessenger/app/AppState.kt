@@ -20,3 +20,11 @@ object AckBus {
     val events = _events.asSharedFlow()
     fun emit(pub: String, id: String, status: String) { _events.tryEmit(Triple(pub, id, status)) }
 }
+
+/** Offline empfangenes Medium (Bild/Datei/Sprache) für einen ggf. offenen Chat. */
+data class OfflineMedia(val pub: String, val kind: String, val name: String, val mime: String, val bytes: ByteArray)
+object OfflineMediaBus {
+    private val _events = MutableSharedFlow<OfflineMedia>(extraBufferCapacity = 16)
+    val events = _events.asSharedFlow()
+    fun emit(m: OfflineMedia) { _events.tryEmit(m) }
+}

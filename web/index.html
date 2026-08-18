@@ -612,16 +612,27 @@ async function assemble(rec){ const total=rec.parts.reduce((n,p)=>n+p.length,0),
   renderMedia(rec.bubble,rec.meta,new Blob([buf],{type:rec.meta.mime})); }
 const CHUNK=16*1024, MAX_BUF=1_000_000;
 async function sendBytes(bytes,kind,name,mime){ const id=(crypto.randomUUID&&crypto.randomUUID())||String(Date.now()+Math.random());
-  const total=Math.max(1,Math.ceil(bytes.length/CHUNK));
-  const meta={t:'meta',id,kind,name:name||'',mime:mime||'application/octet-stream',size:bytes.length,total};
-  dc.send(JSON.stringify(meta)); const bubble=addMediaBubble('self',meta,true);
-  if(currentContact) sentMsgs.set(id,{bubble,pub:currentContact.k});
-  recordMsg(currentContact&&currentContact.k,true,null,mediaLabelOf(meta));
-  for(let i=0;i<total;i++){ const c=await sealChunk(bytes.subarray(i*CHUNK,(i+1)*CHUNK));
-    while(dc.bufferedAmount>MAX_BUF) await new Promise(r=>setTimeout(r,20)); dc.send(JSON.stringify(Object.assign({t:'chunk',id,i},c)));
-    if(bubble) bubble.querySelector('i').style.width=Math.round((i+1)/total*100)+'%'; }
+  const pub=currentContact&&currentContact.k;
+  const meta={t:'meta',id,kind,name:name||'',mime:mime||'application/octet-stream',size:bytes.length,total:0};
+  const bubble=addMediaBubble('self',meta,true);
+  if(pub) sentMsgs.set(id,{bubble,pub});
+  recordMsg(pub,true,null,mediaLabelOf(meta));
+  const live = session && dc && dc.readyState==='open';
+  if(live){                                         // live über WebRTC
+    const total=Math.max(1,Math.ceil(bytes.length/CHUNK)); meta.total=total;
+    dc.send(JSON.stringify(meta));
+    for(let i=0;i<total;i++){ const c=await sealChunk(bytes.subarray(i*CHUNK,(i+1)*CHUNK));
+      while(dc.bufferedAmount>MAX_BUF) await new Promise(r=>setTimeout(r,20)); dc.send(JSON.stringify(Object.assign({t:'chunk',id,i},c)));
+      if(bubble) bubble.querySelector('i').style.width=Math.round((i+1)/total*100)+'%'; }
+    setBubbleStatus(bubble,'sent');
+  } else if(pub && offlineMbxFor(pub)){             // offline: zerstückelt in den Briefkasten (60 KB/Stück)
+    const OFF=60*1024, total=Math.max(1,Math.ceil(bytes.length/OFF));
+    const okMeta=await postOffline(pub,{t:'mm',id,kind,name:name||'',mime:meta.mime,total},true);
+    for(let i=0;i<total;i++){ await postOffline(pub,{t:'mc',id,i,body:b64(bytes.subarray(i*OFF,(i+1)*OFF))},false);
+      if(bubble) bubble.querySelector('i').style.width=Math.round((i+1)/total*100)+'%'; }
+    setBubbleStatus(bubble, okMeta?'sent':'pending');
+  } else if(pub){ const tk=bubble.querySelector('.tick'); if(tk) tk.textContent='⚠'; }
   window.__lastSent={hash:await sha(bytes),size:bytes.length,name};
-  setBubbleStatus(bubble,'sent');
   renderMedia(bubble,meta,new Blob([bytes],{type:meta.mime})); return window.__lastSent.hash; }
 async function sendFileLike(file,kind){ await sendBytes(new Uint8Array(await file.arrayBuffer()),kind,file.name,file.type); }
 function nowTime(){ const d=new Date(); return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0'); }
@@ -648,18 +659,30 @@ async function openMailbox(){
   mbxWs.onmessage=async e=>{ const m=JSON.parse(e.data);
     if(m.type==='mail'){ for(const blob of m.items) await receiveOffline(blob); } };
 }
+const offlineMedia={};
 async function receiveOffline(blob){
   for(const c of loadContacts()){                       // Probe-Entschlüsselung: nur der echte Absender passt
     let raw; try{ const key=await deriveSessionWith(c.k); raw=dec.decode(await aesDecWith(key,blob.iv,blob.ct)); }catch(_){ continue; }
     let env; try{ env=JSON.parse(raw); if(!env||typeof env!=='object'||!env.t) env={t:'m',id:null,body:raw}; }catch(_){ env={t:'m',id:null,body:raw}; }
     if(env.t==='a'){                                     // Bestätigung: Haken bei meiner gesendeten Nachricht setzen
       updateSentStatus(env.id, env.s==='r'?'read':'delivered');
-    } else {                                             // echte Nachricht
+    } else if(env.t==='mm'){                             // Medien-Meta
+      offlineMedia[env.id]={id:env.id,k:c.k,kind:env.kind,name:env.name,mime:env.mime,total:env.total,parts:new Array(env.total),got:0};
+    } else if(env.t==='mc'){                             // Medien-Häppchen
+      const rec=offlineMedia[env.id]; if(rec){ rec.parts[env.i]=fromB64(env.body); rec.got++;
+        if(rec.got>=rec.total){ delete offlineMedia[env.id]; await onIncomingMedia(rec); } }
+    } else {                                             // echte Textnachricht
       window.__offline=window.__offline||[]; window.__offline.push({from:c.n,text:env.body});
       await onIncomingMessage(c.k, env.id, env.body, '📨 offline zugestellt ✓');
     }
     return;
   }
+}
+async function onIncomingMedia(rec){
+  const total=rec.parts.reduce((n,p)=>n+(p?p.length:0),0), buf=new Uint8Array(total); let o=0; for(const p of rec.parts){ if(p){ buf.set(p,o); o+=p.length; } }
+  recordMsg(rec.k,false,null,mediaLabelOf({kind:rec.kind,name:rec.name}));
+  if(chatOpenWith(rec.k)){ const bubble=addMediaBubble('them',{kind:rec.kind,name:rec.name},false); renderMedia(bubble,{kind:rec.kind,name:rec.name,mime:rec.mime},new Blob([buf],{type:rec.mime})); }
+  await sendAck(rec.k,rec.id,'d'); if(chatOpenWith(rec.k)) await sendAck(rec.k,rec.id,'r'); else queueRead(rec.k,rec.id);
 }
 // ===== Status-Haken (✓ gesendet / ✓✓ zugestellt / ✓✓ blau gelesen) + zuverlässiger Offline-Versand =====
 const SEND_BASE = SIG_BASE.replace(/^ws/,'http').replace(/\/ws(\?.*)?$/,'/send');
@@ -673,13 +696,13 @@ function setBubbleStatus(bubble,s){ if(!bubble) return; const cur=bubble.dataset
   let el=bubble.querySelector('.tick'); if(!el){ el=document.createElement('span'); el.className='tick'; bubble.appendChild(el); }
   el.textContent=statusGlyph(s); el.classList.toggle('read',s==='read'); bubble.dataset.status=s; }
 function chatOpenWith(pub){ return !$('chatScreen').hidden && currentContact && currentContact.k===pub; }
-async function postOffline(pub,obj){
+async function postOffline(pub,obj,push){
   try{ const key=await deriveSessionWith(pub); const blob=await aesEncWith(key,enc.encode(JSON.stringify(obj)));
-    const r=await fetch(SEND_BASE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mailbox:await mailboxId(pub),blob})});
+    const r=await fetch(SEND_BASE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mailbox:await mailboxId(pub),blob,push:push!==false})});
     return r.ok; }catch(e){ console.error('postOffline',e); return false; } }
 async function sendAck(pub,id,s){ if(!id) return;
   if(currentContact&&currentContact.k===pub&&dc&&dc.readyState==='open') dc.send(JSON.stringify({t:'ack',id,s}));
-  else await postOffline(pub,{t:'a',id,s}); }
+  else await postOffline(pub,{t:'a',id,s},false); }
 function updateSentStatus(id,s){ const e=sentMsgs.get(id); if(e){ setBubbleStatus(e.bubble,s); updateHistoryStatus(e.pub,id,s); } }
 function queueRead(pub,id){ if(!id) return; let set=pendingReadAcks.get(pub); if(!set){ set=new Set(); pendingReadAcks.set(pub,set); } set.add(id); }
 async function flushReadAcks(pub){ const set=pendingReadAcks.get(pub); if(!set) return; pendingReadAcks.delete(pub); for(const id of set) await sendAck(pub,id,'r'); }

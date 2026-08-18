@@ -116,21 +116,41 @@ class Connection(
         return id
     }
 
-    /** Bild/Datei/Sprachnachricht senden: verschlüsselt, in Häppchen (wie Web-Client). */
+    /** Bild/Datei/Sprachnachricht senden: verschlüsselt, in Häppchen. Live über WebRTC, sonst offline in den Briefkasten. */
     fun sendMedia(kind: String, name: String, mime: String, bytes: ByteArray) {
-        val c = crypto ?: return
         val id = java.util.UUID.randomUUID().toString()
-        val total = maxOf(1, (bytes.size + CHUNK - 1) / CHUNK)
-        rtc?.sendText(JSONObject().put("t", "meta").put("id", id).put("kind", kind)
-            .put("name", name).put("mime", mime).put("size", bytes.size).put("total", total).toString())
-        var i = 0
-        while (i < total) {
-            val slice = bytes.copyOfRange(i * CHUNK, minOf((i + 1) * CHUNK, bytes.size))
-            val (iv, ct) = c.encrypt(slice)
-            rtc?.sendText(JSONObject().put("t", "chunk").put("id", id).put("i", i).put("iv", iv).put("ct", ct).toString())
-            i++
+        val c = crypto
+        if (c != null) {                                   // live über die Direktverbindung
+            val total = maxOf(1, (bytes.size + CHUNK - 1) / CHUNK)
+            rtc?.sendText(JSONObject().put("t", "meta").put("id", id).put("kind", kind)
+                .put("name", name).put("mime", mime).put("size", bytes.size).put("total", total).toString())
+            var i = 0
+            while (i < total) {
+                val slice = bytes.copyOfRange(i * CHUNK, minOf((i + 1) * CHUNK, bytes.size))
+                val (iv, ct) = c.encrypt(slice)
+                rtc?.sendText(JSONObject().put("t", "chunk").put("id", id).put("i", i).put("iv", iv).put("ct", ct).toString())
+                i++
+            }
+            ui { onMedia?.invoke(true, kind, name, mime, bytes, id); onSentStatus?.invoke(id, "sent") }
+        } else if (com.selfmessenger.app.Settings.offlineMailboxFor(ctx, contact.pubB64)) {   // offline: zerstückelt in den Briefkasten
+            ui { onMedia?.invoke(true, kind, name, mime, bytes, id) }
+            Thread {
+                val total = maxOf(1, (bytes.size + OFF_CHUNK - 1) / OFF_CHUNK)
+                MailboxPost.postEnvelope(me, signalingBaseUrl, contact.pubB64,   // Meta weckt per Push
+                    JSONObject().put("t", "mm").put("id", id).put("kind", kind).put("name", name).put("mime", mime).put("total", total))
+                var i = 0
+                while (i < total) {
+                    val slice = bytes.copyOfRange(i * OFF_CHUNK, minOf((i + 1) * OFF_CHUNK, bytes.size))
+                    val b64 = android.util.Base64.encodeToString(slice, android.util.Base64.NO_WRAP)
+                    MailboxPost.postEnvelope(me, signalingBaseUrl, contact.pubB64,
+                        JSONObject().put("t", "mc").put("id", id).put("i", i).put("body", b64), push = false)
+                    i++
+                }
+                ui { onSentStatus?.invoke(id, "sent") }
+            }.start()
+        } else {                                           // Zwischenlagern aus
+            ui { onMedia?.invoke(true, kind, name, mime, bytes, id); onSentStatus?.invoke(id, "fail") }
         }
-        ui { onMedia?.invoke(true, kind, name, mime, bytes, id); onSentStatus?.invoke(id, "sent") }
     }
 
     private val incoming = HashMap<String, MediaAcc>()
@@ -174,7 +194,7 @@ class Connection(
 
     fun close() { rtc?.close(); signaling?.close(); egl.release() }
 
-    private companion object { const val CHUNK = 16 * 1024 }
+    private companion object { const val CHUNK = 16 * 1024; const val OFF_CHUNK = 60 * 1024 }
 }
 
 /** Sammelt eintreffende Medien-Häppchen bis vollständig. */

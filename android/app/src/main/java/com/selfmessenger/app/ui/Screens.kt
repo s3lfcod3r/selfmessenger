@@ -47,6 +47,7 @@ import com.selfmessenger.app.MediaFiles
 import com.selfmessenger.app.Me
 import com.selfmessenger.app.MessageStore
 import com.selfmessenger.app.OfflineBus
+import com.selfmessenger.app.OfflineMediaBus
 import com.selfmessenger.app.PendingRead
 import com.selfmessenger.app.Qr
 import com.selfmessenger.app.Settings
@@ -435,6 +436,10 @@ private fun ChatScreen(me: Me, contact: Contact, onBack: () -> Unit) {
     // Status-Haken aus Offline-Bestätigungen (zugestellt/gelesen) aktualisieren
     LaunchedEffect(contact.pubB64) {
         AckBus.events.collect { (pub, id, s) -> if (pub == contact.pubB64) updateStatus(id, s) }
+    }
+    // Offline empfangenes Bild/Medium live einblenden (persistiert wurde es bereits in MainNav/MailboxClient)
+    LaunchedEffect(contact.pubB64) {
+        OfflineMediaBus.events.collect { om -> if (om.pub == contact.pubB64) messages.add(ChatItem(false, media = MediaData(om.kind, om.name, om.mime, om.bytes))) }
     }
 
     Column(Modifier.fillMaxSize()) {
