@@ -19,6 +19,22 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.CallEnd
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.VideocamOff
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -184,7 +200,7 @@ private fun TopBar(onBack: (() -> Unit)? = null, content: @Composable RowScope.(
         Modifier.fillMaxWidth().height(56.dp).background(SelfPanel).padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (onBack != null) IconButton(onClick = onBack) { Text("←", fontSize = 22.sp, color = SelfText) }
+        if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Zurück", tint = SelfText) }
         else Spacer(Modifier.width(10.dp))
         content()
     }
@@ -200,8 +216,8 @@ private fun ChatsScreen(me: Me, onOpenChat: (Contact) -> Unit, onMyCode: () -> U
         Column(Modifier.fillMaxSize()) {
             TopBar {
                 Box(Modifier.weight(1f)) { Wordmark(19) }
-                IconButton(onClick = onMyCode) { Text("🔗", fontSize = 19.sp) }
-                IconButton(onClick = onSettings) { Text("⚙️", fontSize = 19.sp) }
+                IconButton(onClick = onMyCode) { Icon(Icons.Filled.Link, "Mein Code", tint = SelfText) }
+                IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, "Einstellungen", tint = SelfText) }
             }
             if (contacts.isEmpty()) {
                 Column(Modifier.fillMaxSize().padding(28.dp), Arrangement.Center, Alignment.CenterHorizontally) {
@@ -227,7 +243,7 @@ private fun ChatsScreen(me: Me, onOpenChat: (Contact) -> Unit, onMyCode: () -> U
         FloatingActionButton(
             onClick = onAddFriend, containerColor = SelfTeal, contentColor = OnTeal,
             modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp)
-        ) { Text("+", fontSize = 28.sp) }
+        ) { Icon(Icons.Filled.Add, "Freund hinzufügen") }
     }
 }
 
@@ -450,9 +466,9 @@ private fun ChatScreen(me: Me, contact: Contact, onBack: () -> Unit) {
                 Text(contact.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = SelfText, maxLines = 1)
                 Text(status, fontSize = 11.sp, color = SelfMuted, maxLines = 1)
             }
-            IconButton(onClick = { withCallPerms(false) { call = CallUi(false, false); conn.startCall(false) } }) { Text("📞", fontSize = 18.sp) }
-            IconButton(onClick = { withCallPerms(true) { call = CallUi(true, false); conn.startCall(true) } }) { Text("📹", fontSize = 18.sp) }
-            IconButton(onClick = { showMenu = true }) { Text("⋮", fontSize = 22.sp, color = SelfText) }
+            IconButton(onClick = { withCallPerms(false) { call = CallUi(false, false); conn.startCall(false) } }) { Icon(Icons.Filled.Call, "Anrufen", tint = SelfText) }
+            IconButton(onClick = { withCallPerms(true) { call = CallUi(true, false); conn.startCall(true) } }) { Icon(Icons.Filled.Videocam, "Videoanruf", tint = SelfText) }
+            IconButton(onClick = { showMenu = true }) { Icon(Icons.Filled.MoreVert, "Menü", tint = SelfText) }
         }
         if (showMenu) ContactSettingsDialog(contact, onClearHistory = { MessageStore.clear(ctx, contact.pubB64); messages.clear() }) { showMenu = false }
         // Nachrichten — neueste immer unten (auch bei wenigen Nachrichten)
@@ -461,15 +477,15 @@ private fun ChatScreen(me: Me, contact: Contact, onBack: () -> Unit) {
         }
         // Eingabeleiste
         Row(Modifier.fillMaxWidth().background(SelfPanel).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { imagePicker.launch("image/*") }) { Text("📎", fontSize = 20.sp) }
+            IconButton(onClick = { imagePicker.launch("image/*") }) { Icon(Icons.Filled.AttachFile, "Bild/Datei", tint = SelfMuted) }
             IconButton(onClick = {
                 if (recording) { val b = recorder.stop(); recording = false; if (b != null) conn.sendMedia("voice", "sprachnachricht.m4a", "audio/mp4", b) }
                 else if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startRec()
                 else micPermission.launch(Manifest.permission.RECORD_AUDIO)
-            }) { Text(if (recording) "⏺" else "🎤", fontSize = 20.sp) }
+            }) { Icon(if (recording) Icons.Filled.Stop else Icons.Filled.Mic, "Sprachnachricht", tint = if (recording) Color(0xFFE5484D) else SelfMuted) }
             OutlinedTextField(value = input, onValueChange = { input = it }, modifier = Modifier.weight(1f), placeholder = { Text("Nachricht") }, singleLine = true, shape = RoundedCornerShape(22.dp))
             Spacer(Modifier.width(6.dp))
-            FilledIconButton(onClick = { if (input.isNotBlank()) { conn.sendText(input.trim()); input = "" } }, colors = IconButtonDefaults.filledIconButtonColors(containerColor = SelfTeal, contentColor = OnTeal)) { Text("➤") }
+            FilledIconButton(onClick = { if (input.isNotBlank()) { conn.sendText(input.trim()); input = "" } }, colors = IconButtonDefaults.filledIconButtonColors(containerColor = SelfTeal, contentColor = OnTeal)) { Icon(Icons.AutoMirrored.Filled.Send, "Senden") }
         }
     }
 
@@ -621,20 +637,20 @@ private fun CallOverlay(
         }
         Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp), horizontalArrangement = Arrangement.spacedBy(22.dp), verticalAlignment = Alignment.CenterVertically) {
             if (call.incoming) {
-                CallCtl("📞", Color(0xFF25D366), onAccept)
+                CallCtl(Icons.Filled.Call, Color(0xFF25D366), onAccept, "Annehmen")
             } else {
-                CallCtl(if (call.muted) "🔇" else "🎤", Color(0x22FFFFFF), onMute)
-                if (call.video) CallCtl("📷", Color(0x22FFFFFF), onCam)
+                CallCtl(if (call.muted) Icons.Filled.MicOff else Icons.Filled.Mic, Color(0x22FFFFFF), onMute, "Stumm")
+                if (call.video) CallCtl(if (call.camOff) Icons.Filled.VideocamOff else Icons.Filled.Videocam, Color(0x22FFFFFF), onCam, "Kamera")
             }
-            CallCtl("📞", Color(0xFFE5484D), onHangup, rotate = 135f)
+            CallCtl(Icons.Filled.CallEnd, Color(0xFFE5484D), onHangup, "Auflegen")
         }
     }
 }
 
 @Composable
-private fun CallCtl(glyph: String, bg: Color, onClick: () -> Unit, rotate: Float = 0f) {
+private fun CallCtl(icon: ImageVector, bg: Color, onClick: () -> Unit, desc: String = "") {
     Box(Modifier.size(62.dp).clip(CircleShape).background(bg).clickable { onClick() }, contentAlignment = Alignment.Center) {
-        Text(glyph, fontSize = 25.sp, color = Color.White, modifier = if (rotate != 0f) Modifier.rotate(rotate) else Modifier)
+        Icon(icon, desc, tint = Color.White, modifier = Modifier.size(26.dp))
     }
 }
 

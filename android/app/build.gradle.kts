@@ -22,8 +22,8 @@ android {
         applicationId = "com.selfmessenger.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 11
-        versionName = "0.1.10"
+        versionCode = 12
+        versionName = "0.1.11"
     }
     signingConfigs {
         // Android-Standard-Debug-Keystore aus der Toolchain (Passwort "android" ist kein Secret).

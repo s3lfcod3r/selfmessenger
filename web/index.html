@@ -197,6 +197,7 @@
   .modal-box h3{margin:0 0 .1rem;color:#eef4f7;font-size:1.1rem}
   .modal-actions{display:flex;justify-content:flex-end;gap:.5rem;margin-top:.8rem}
   .btn-ghost.block{display:block;width:100%;text-align:left}
+  .iconbtn svg,.composer .icon svg,.call-btn svg,.fab svg{display:block}
   .msg .tick{font-size:.72rem;margin-left:5px;letter-spacing:-1px;color:#8a9caa;opacity:.9}
   .msg .tick.read{color:#53bdeb;opacity:1}
   .msg .body .dl{display:inline-block;margin-top:6px;font-size:12px;color:var(--a);text-decoration:none}
@@ -226,12 +227,12 @@
     <div class="appbar">
       <span class="appbar-title"><span class="self">Self</span><span class="name">Messenger</span></span>
       <div class="appbar-actions">
-        <button class="iconbtn" id="btnMyCode" title="Mein Code">🔗</button>
-        <button class="iconbtn" id="btnSettings" title="Einstellungen">⚙️</button>
+        <button class="iconbtn" id="btnMyCode" title="Mein Code"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5"/></svg></button>
+        <button class="iconbtn" id="btnSettings" title="Einstellungen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.7 7.7 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.7 7.7 0 0 0-1.7-1l-.4-2.5H10.9l-.4 2.5a7.7 7.7 0 0 0-1.7 1l-2.4-1-2 3.4L4.6 11a7.7 7.7 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.7 7.7 0 0 0 1.7 1l.4 2.5h4.2l.4-2.5a7.7 7.7 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6z"/></svg></button>
       </div>
     </div>
     <div class="chatlist" id="contacts"><div class="empty">Noch keine Chats.<br />Tippe <b>＋</b> und tauscht eure Codes persönlich.</div></div>
-    <button class="fab" id="btnAddFriend" title="Freund hinzufügen">＋</button>
+    <button class="fab" id="btnAddFriend" title="Freund hinzufügen"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
   </div>
 
   <!-- ===== EINSTELLUNGEN ===== -->
@@ -280,24 +281,24 @@
   <!-- ===== CHAT ===== -->
   <div id="chatScreen" class="screen" hidden>
     <div class="appbar chat-appbar">
-      <button class="iconbtn" id="back">←</button>
+      <button class="iconbtn" id="back"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
       <div class="peer-avatar" id="peerAvatar">?</div>
       <div class="peer-meta">
         <div class="peer-name" id="peerName">Chat</div>
         <div class="status" id="status">verbinde…</div>
       </div>
-      <button class="iconbtn" id="callAudio" title="Anrufen" disabled>📞</button>
-      <button class="iconbtn" id="callVideo" title="Videoanruf" disabled>📹</button>
-      <button class="iconbtn" id="chatMenu" title="Chat-Einstellungen">⋮</button>
+      <button class="iconbtn" id="callAudio" title="Anrufen" disabled><svg viewBox="0 0 24 24" width="21" height="21" fill="currentColor"><path d="M6.6 10.8c1.4 2.8 3.8 5.2 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.4.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1l-2.3 2.2z"/></svg></button>
+      <button class="iconbtn" id="callVideo" title="Videoanruf" disabled><svg viewBox="0 0 24 24" width="21" height="21" fill="currentColor"><path d="M15 8v8c0 .6-.4 1-1 1H4c-.6 0-1-.4-1-1V8c0-.6.4-1 1-1h10c.6 0 1 .4 1 1zm2 2.5 4-3v9l-4-3v-3z"/></svg></button>
+      <button class="iconbtn" id="chatMenu" title="Chat-Einstellungen"><svg viewBox="0 0 24 24" width="21" height="21" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg></button>
       <span id="me" hidden></span>
     </div>
     <div class="safety" id="safety"></div>
     <div class="log" id="log"></div>
     <div class="composer">
-      <button class="icon" id="attach" title="Bild/Datei" disabled>📎</button>
-      <button class="icon" id="recBtn" title="Sprachnachricht" disabled>🎤</button>
+      <button class="icon" id="attach" title="Bild/Datei" disabled><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11 12.2 20.2a5 5 0 0 1-7-7l9.1-9.2a3 3 0 1 1 4.3 4.3l-9.2 9.1a1 1 0 0 1-1.4-1.4l8.5-8.5"/></svg></button>
+      <button class="icon" id="recBtn" title="Sprachnachricht" disabled><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M18 12a6 6 0 0 1-12 0H4a8 8 0 0 0 7 7.9V22h2v-2.1A8 8 0 0 0 20 12h-2z"/></svg></button>
       <input type="text" id="in" placeholder="Nachricht" disabled />
-      <button class="icon send-btn" id="send" disabled>➤</button>
+      <button class="icon send-btn" id="send" disabled><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M2.5 21 23 12 2.5 3v7l14 2-14 2v7z"/></svg></button>
     </div>
     <input type="file" id="file" style="display:none" />
   </div>
@@ -321,10 +322,10 @@
     </div>
     <video id="localVideo" class="local-video" autoplay muted playsinline hidden></video>
     <div class="call-controls">
-      <button class="call-btn accept" id="btnAccept" title="Annehmen" hidden>📞</button>
-      <button class="call-btn" id="btnMute" title="Stummschalten">🎤</button>
-      <button class="call-btn" id="btnCam" title="Kamera aus" hidden>📷</button>
-      <button class="call-btn end" id="hangup" title="Auflegen">📞</button>
+      <button class="call-btn accept" id="btnAccept" title="Annehmen" hidden><svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M6.6 10.8c1.4 2.8 3.8 5.2 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.4.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1l-2.3 2.2z"/></svg></button>
+      <button class="call-btn" id="btnMute" title="Stummschalten"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M18 12a6 6 0 0 1-12 0H4a8 8 0 0 0 7 7.9V22h2v-2.1A8 8 0 0 0 20 12h-2z"/></svg></button>
+      <button class="call-btn" id="btnCam" title="Kamera aus" hidden><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M15 8v8c0 .6-.4 1-1 1H4c-.6 0-1-.4-1-1V8c0-.6.4-1 1-1h10c.6 0 1 .4 1 1zm2 2.5 4-3v9l-4-3v-3z"/></svg></button>
+      <button class="call-btn end" id="hangup" title="Auflegen"><svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M6.6 10.8c1.4 2.8 3.8 5.2 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.4.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1l-2.3 2.2z"/></svg></button>
     </div>
   </div>
 
@@ -575,7 +576,7 @@ async function acceptCall(){ let st;
 function attachLocal(st){ localStream=st; $('localVideo').srcObject=st;
   for(const t of st.getTracks()) pc.addTrack(t,st); window.__localCallKinds=st.getTracks().map(t=>t.kind); }
 function toggleMute(){ const a=localStream&&localStream.getAudioTracks()[0]; if(!a) return; a.enabled=!a.enabled;
-  $('btnMute').classList.toggle('off',!a.enabled); $('btnMute').textContent=a.enabled?'🎤':'🔇'; }
+  $('btnMute').classList.toggle('off',!a.enabled); }
 function toggleCam(){ const v=localStream&&localStream.getVideoTracks()[0]; if(!v) return; v.enabled=!v.enabled;
   $('btnCam').classList.toggle('off',!v.enabled); }
 function hangup(sendBye){ if(sendBye!==false){ try{ if(dc&&dc.readyState==='open') dc.send(JSON.stringify({t:'bye'})); }catch(_){} }
@@ -728,8 +729,8 @@ async function toggleRec(){ if(mediaRec&&mediaRec.state==='recording'){ mediaRec
   try{ const st=await navigator.mediaDevices.getUserMedia({audio:true}); recChunks=[]; mediaRec=new MediaRecorder(st);
     mediaRec.ondataavailable=e=>{ if(e.data.size) recChunks.push(e.data); };
     mediaRec.onstop=async()=>{ st.getTracks().forEach(t=>t.stop()); const blob=new Blob(recChunks,{type:mediaRec.mimeType||'audio/webm'});
-      await sendBytes(new Uint8Array(await blob.arrayBuffer()),'voice','sprachnachricht',blob.type); $('recBtn').classList.remove('rec'); $('recBtn').textContent='🎤'; };
-    mediaRec.start(); $('recBtn').classList.add('rec'); $('recBtn').textContent='⏹';
+      await sendBytes(new Uint8Array(await blob.arrayBuffer()),'voice','sprachnachricht',blob.type); $('recBtn').classList.remove('rec'); };
+    mediaRec.start(); $('recBtn').classList.add('rec');
   }catch(err){ setStatus('Mikrofon nicht verfügbar: '+err.message,'bad'); } }
 
 // ===== UI-Verdrahtung =====
