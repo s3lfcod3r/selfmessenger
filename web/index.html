@@ -156,6 +156,29 @@
   .composer input#in{flex:1;min-width:0;background:#0c1620;border:1px solid var(--line);border-radius:22px;padding:11px 16px;color:var(--ink);font-size:15px;font-family:var(--sans);height:auto}
   .composer .send-btn{background:var(--a);color:#04120d;width:44px;height:44px;border-radius:50%;font-size:18px;border:none;font-weight:700}
   .safety{margin:0!important;border-radius:0!important;border-left:none!important;border-right:none!important;border-top:none!important;text-align:center;font-size:11px}
+  /* ===== Anruf (Vollbild) ===== */
+  .call-overlay{position:fixed;inset:0;z-index:50;background:#05070a;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .call-overlay[hidden]{display:none}
+  .remote-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#05070a;display:none}
+  .call-overlay.video .remote-video{display:block}
+  .call-center{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;padding:20px}
+  .call-overlay.video .call-center{position:absolute;top:22px;left:0;right:0;gap:4px;padding:0}
+  .call-overlay.video .call-avatar{display:none}
+  .call-avatar{width:118px;height:118px;border-radius:50%;background:linear-gradient(135deg,var(--a2),var(--a-bright));display:flex;align-items:center;justify-content:center;color:#04120d;font-weight:700;font-size:50px;box-shadow:0 12px 44px -8px rgba(51,167,140,.5)}
+  .call-name{font-size:24px;font-weight:600;color:#fff}
+  .call-state{font-size:14px;color:#9fb3c0}
+  .call-overlay.video .call-name{text-shadow:0 1px 8px rgba(0,0,0,.7)}
+  .call-overlay.video .call-state{color:#e3ebf0;text-shadow:0 1px 8px rgba(0,0,0,.7)}
+  .local-video{position:absolute;top:16px;right:16px;width:100px;height:144px;object-fit:cover;border-radius:12px;border:1px solid rgba(255,255,255,.22);z-index:3;background:#111;box-shadow:0 6px 22px rgba(0,0,0,.55)}
+  .local-video[hidden]{display:none}
+  .call-controls{position:absolute;bottom:38px;left:0;right:0;z-index:4;display:flex;gap:20px;justify-content:center;align-items:center}
+  .call-btn{width:60px;height:60px;border-radius:50%;border:none;background:rgba(255,255,255,.13);color:#fff;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .call-btn:hover{background:rgba(255,255,255,.22)}
+  .call-btn.off{background:#fff;color:#111}
+  .call-btn.accept{background:#25d366}
+  .call-btn.accept:hover{background:#38df78}
+  .call-btn.end{background:#e5484d;transform:rotate(135deg)}
+  .call-btn.end:hover{background:#f2585d}
 </style>
 </head>
 <body>
@@ -216,10 +239,6 @@
       <span id="me" hidden></span>
     </div>
     <div class="safety" id="safety"></div>
-    <div class="call" id="callPanel">
-      <div class="videos"><video id="localVideo" autoplay muted playsinline></video><video id="remoteVideo" autoplay playsinline></video></div>
-      <div class="callbar"><span class="st" id="callState">Anruf</span><button class="icon rec" id="hangup">⏹ Auflegen</button></div>
-    </div>
     <div class="log" id="log"></div>
     <div class="composer">
       <button class="icon" id="attach" title="Bild/Datei" disabled>📎</button>
@@ -228,6 +247,23 @@
       <button class="icon send-btn" id="send" disabled>➤</button>
     </div>
     <input type="file" id="file" style="display:none" />
+  </div>
+
+  <!-- ===== ANRUF (Vollbild, WhatsApp-Stil) ===== -->
+  <div id="callOverlay" class="call-overlay" hidden>
+    <video id="remoteVideo" class="remote-video" autoplay playsinline></video>
+    <div class="call-center" id="callCenter">
+      <div class="call-avatar" id="callAvatar">?</div>
+      <div class="call-name" id="callName">Anruf</div>
+      <div class="call-state" id="callState">verbinde…</div>
+    </div>
+    <video id="localVideo" class="local-video" autoplay muted playsinline hidden></video>
+    <div class="call-controls">
+      <button class="call-btn accept" id="btnAccept" title="Annehmen" hidden>📞</button>
+      <button class="call-btn" id="btnMute" title="Stummschalten">🎤</button>
+      <button class="call-btn" id="btnCam" title="Kamera aus" hidden>📷</button>
+      <button class="call-btn end" id="hangup" title="Auflegen">📞</button>
+    </div>
   </div>
 </div>
 <script>
@@ -396,28 +432,58 @@ function enableChatRatchet(){
   setStatus('✓ Ende-zu-Ende · Double Ratchet · '+currentContact.n,'ok');
 }
 
-// ===== Anrufe =====
-let localStream=null,remoteStream=null; window.__remoteKinds=[]; window.__localCallKinds=[];
+// ===== Anrufe (Vollbild, WhatsApp-Stil) =====
+let localStream=null,remoteStream=null,callTimer=null,callStart=0,inVideoCall=false;
+window.__remoteKinds=[]; window.__localCallKinds=[];
+function setCallState(s){ $('callState').textContent=s; }
+function startCallTimer(){ if(callTimer) return; callStart=Date.now(); callTimer=setInterval(()=>{
+  const s=Math.floor((Date.now()-callStart)/1000), m=Math.floor(s/60);
+  setCallState((m<10?'0':'')+m+':'+((s%60)<10?'0':'')+(s%60)); },1000); }
+function showCallOverlay(video){ inVideoCall=video;
+  $('callOverlay').classList.toggle('video',video);
+  $('callAvatar').textContent=currentContact?initialOf(currentContact.n):'?';
+  $('callName').textContent=currentContact?currentContact.n:'Anruf';
+  $('localVideo').hidden=!video; $('callOverlay').hidden=false; }
+function callConnectedUi(){ $('btnAccept').hidden=true; $('btnMute').hidden=false; $('btnCam').hidden=!inVideoCall; startCallTimer(); }
 function onRemoteTrack(e){ if(!remoteStream){ remoteStream=new MediaStream(); $('remoteVideo').srcObject=remoteStream; }
   remoteStream.addTrack(e.track); if(!window.__remoteKinds.includes(e.track.kind)) window.__remoteKinds.push(e.track.kind);
-  showCall('Anruf verbunden'); addSys('📞 '+e.track.kind+'-Spur empfangen (DTLS-SRTP)'); }
-function showCall(s){ $('callPanel').style.display='flex'; $('callState').textContent=s; }
-async function startCall(video){ let st; try{ st=await navigator.mediaDevices.getUserMedia({audio:true,video}); }
-  catch(err){ setStatus('Kamera/Mikro nicht verfügbar: '+err.message,'bad'); return; } attachLocal(st,video,video?'Videoanruf…':'Anruf…'); }
-function attachLocal(st,video,label){ localStream=st; $('localVideo').srcObject=st;
-  for(const t of st.getTracks()) pc.addTrack(t,st); window.__localCallKinds=st.getTracks().map(t=>t.kind);
-  showCall(label); addSys('📞 Anruf gestartet: '+window.__localCallKinds.join('+')); }
+  const video=window.__remoteKinds.includes('video');
+  if(!localStream){                                    // eingehender Anruf -> Annehmen-Ansicht
+    if($('callOverlay').hidden) showCallOverlay(video); else if(video){ inVideoCall=true; $('callOverlay').classList.add('video'); $('localVideo').hidden=false; }
+    setCallState('Eingehender Anruf …'); $('btnAccept').hidden=false; $('btnMute').hidden=true; $('btnCam').hidden=true;
+  } else {                                             // wir haben angerufen -> jetzt verbunden
+    if(video && !inVideoCall){ inVideoCall=true; $('callOverlay').classList.add('video'); $('localVideo').hidden=false; }
+    callConnectedUi();
+  } }
+async function startCall(video){ if(!pc) return; let st;
+  try{ st=await navigator.mediaDevices.getUserMedia({audio:true,video}); }
+  catch(err){ addSys('📞 Mikro/Kamera nicht freigegeben'); return; }
+  showCallOverlay(video); setCallState('klingelt …'); $('btnAccept').hidden=true; $('btnMute').hidden=false; $('btnCam').hidden=!video;
+  attachLocal(st); }
+async function acceptCall(){ let st;
+  try{ st=await navigator.mediaDevices.getUserMedia({audio:true,video:inVideoCall}); }
+  catch(err){ addSys('📞 Mikro/Kamera nicht freigegeben'); hangup(); return; }
+  attachLocal(st); callConnectedUi(); }
+function attachLocal(st){ localStream=st; $('localVideo').srcObject=st;
+  for(const t of st.getTracks()) pc.addTrack(t,st); window.__localCallKinds=st.getTracks().map(t=>t.kind); }
+function toggleMute(){ const a=localStream&&localStream.getAudioTracks()[0]; if(!a) return; a.enabled=!a.enabled;
+  $('btnMute').classList.toggle('off',!a.enabled); $('btnMute').textContent=a.enabled?'🎤':'🔇'; }
+function toggleCam(){ const v=localStream&&localStream.getVideoTracks()[0]; if(!v) return; v.enabled=!v.enabled;
+  $('btnCam').classList.toggle('off',!v.enabled); }
 function hangup(){ if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
+  if(remoteStream){ try{ remoteStream.getTracks().forEach(t=>t.stop()); }catch(_){} remoteStream=null; }
   if(window.__synTimer){ clearInterval(window.__synTimer); window.__synTimer=null; }
+  if(callTimer){ clearInterval(callTimer); callTimer=null; }
   pc&&pc.getSenders().forEach(s=>{ if(s.track){ try{ pc.removeTrack(s); }catch(_){} } });
-  $('callPanel').style.display='none'; addSys('📞 Anruf beendet'); }
+  $('callOverlay').hidden=true; $('callOverlay').classList.remove('video'); inVideoCall=false; window.__remoteKinds=[];
+  $('btnMute').classList.remove('off'); $('btnMute').textContent='🎤'; }
 window.__startSyntheticCall=(video)=>{ const tracks=[]; const AC=window.AudioContext||window.webkitAudioContext;
   const ac=new AC(); const dst=ac.createMediaStreamDestination(); const osc=ac.createOscillator(); osc.frequency.value=440; osc.connect(dst); osc.start();
   tracks.push(dst.stream.getAudioTracks()[0]);
   if(video){ const c=document.createElement('canvas'); c.width=160;c.height=120; const ctx=c.getContext('2d');
     window.__synTimer=setInterval(()=>{ctx.fillStyle='#'+((Math.random()*0xffffff)|0).toString(16).padStart(6,'0');ctx.fillRect(0,0,160,120);},100);
     tracks.push(c.captureStream(10).getVideoTracks()[0]); }
-  const st=new MediaStream(tracks); attachLocal(st,video,'Test-Anruf…'); return window.__localCallKinds; };
+  const st=new MediaStream(tracks); showCallOverlay(video); setCallState('klingelt …'); $('btnMute').hidden=false; $('btnCam').hidden=!video; attachLocal(st); return window.__localCallKinds; };
 
 // ===== Nachrichten + Medien =====
 const incoming=new Map(); window.__lastRecv=null; window.__lastSent=null;
@@ -520,6 +586,7 @@ $('send').onclick=sendChat; $('in').addEventListener('keydown',e=>{if(e.key==='E
 $('attach').onclick=()=>$('file').click();
 $('file').onchange=e=>{ const f=e.target.files[0]; if(!f) return; sendFileLike(f,f.type.startsWith('image/')?'image':'file'); e.target.value=''; };
 $('recBtn').onclick=toggleRec; $('callAudio').onclick=()=>startCall(false); $('callVideo').onclick=()=>startCall(true); $('hangup').onclick=hangup;
+$('btnAccept').onclick=acceptCall; $('btnMute').onclick=toggleMute; $('btnCam').onclick=toggleCam;
 window.__sendRandom=async(n,kind='image',mime='image/png')=>sendBytes(crypto.getRandomValues(new Uint8Array(n)),kind,'test.png',mime);
 // Test-Hooks
 window.__getPayload=()=>myPayload();
