@@ -41,6 +41,7 @@ import com.selfmessenger.app.Contacts
 import com.selfmessenger.app.Identity
 import com.selfmessenger.app.AckBus
 import com.selfmessenger.app.AppState
+import com.selfmessenger.app.MediaFiles
 import com.selfmessenger.app.Me
 import com.selfmessenger.app.MessageStore
 import com.selfmessenger.app.OfflineBus
@@ -354,13 +355,26 @@ private fun ChatScreen(me: Me, contact: Contact, onBack: () -> Unit) {
     val messages = remember {
         mutableStateListOf<ChatItem>().also { list ->
             if (Settings.saveHistoryFor(ctx, contact.pubB64))
-                MessageStore.load(ctx, contact.pubB64).forEach { list.add(ChatItem(it.fromMe, text = it.text ?: it.label, time = it.time, id = it.id, status = it.status)) }
+                MessageStore.load(ctx, contact.pubB64).forEach { sm ->
+                    val media = sm.mediaId?.let { mid ->
+                        MediaFiles.load(ctx, mid)?.let { b -> MediaData(sm.mediaKind ?: "file", sm.mediaName ?: "Datei", sm.mediaMime ?: "application/octet-stream", b) }
+                    }
+                    list.add(ChatItem(sm.fromMe, text = if (media == null) (sm.text ?: sm.label) else null, media = media, time = sm.time, id = sm.id, status = sm.status))
+                }
         }
     }
     val listState = rememberLazyListState()
     fun persist(item: ChatItem, label: String?) {
-        if (Settings.saveHistoryFor(ctx, contact.pubB64))
+        if (!Settings.saveHistoryFor(ctx, contact.pubB64)) return
+        val m = item.media
+        if (m == null) {
             MessageStore.append(ctx, contact.pubB64, StoredMsg(item.fromMe, item.text, label, item.time, item.id, item.status))
+        } else {
+            Thread {   // Medien-Bytes auf Platte (überstehen Neustart), außerhalb des UI-Threads
+                val mid = MediaFiles.save(ctx, m.bytes)
+                MessageStore.append(ctx, contact.pubB64, StoredMsg(item.fromMe, null, label, item.time, item.id, item.status, mid, m.kind, m.name, m.mime))
+            }.start()
+        }
     }
     fun updateStatus(id: String, s: String) {
         val i = messages.indexOfFirst { it.id == id }
@@ -486,14 +500,23 @@ private fun MessageBubble(item: ChatItem) {
 
 @Composable
 private fun MediaContent(m: MediaData) {
+    val ctx = LocalContext.current
     when (m.kind) {
         "image" -> {
             val bmp = remember(m) { BitmapFactory.decodeByteArray(m.bytes, 0, m.bytes.size) }
-            if (bmp != null) Image(bmp.asImageBitmap(), m.name, Modifier.heightIn(max = 220.dp).clip(RoundedCornerShape(8.dp)))
-            else Text("🖼 ${m.name}", color = SelfText)
+            Column {
+                if (bmp != null) Image(bmp.asImageBitmap(), m.name, Modifier.heightIn(max = 240.dp).clip(RoundedCornerShape(8.dp)))
+                else Text("🖼 ${m.name}", color = SelfText)
+                TextButton(
+                    onClick = {
+                        val ok = MediaFiles.saveImageToGallery(ctx, m.bytes, m.name, m.mime)
+                        Toast.makeText(ctx, if (ok) "Bild in Galerie gespeichert" else "Speichern fehlgeschlagen", Toast.LENGTH_SHORT).show()
+                    },
+                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp)
+                ) { Text("⬇ Speichern", fontSize = 12.sp, color = SelfTeal) }
+            }
         }
         "voice" -> {
-            val ctx = LocalContext.current
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("🎤 Sprachnachricht", color = SelfText)
                 TextButton(onClick = { VoicePlayer.play(ctx, m.bytes) }) { Text("▶") }

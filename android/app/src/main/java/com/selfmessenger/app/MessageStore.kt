@@ -10,7 +10,9 @@ import org.json.JSONObject
  *  `id`/`status` nur für eigene Nachrichten (Status-Haken: sent/delivered/read/fail). */
 data class StoredMsg(
     val fromMe: Boolean, val text: String?, val label: String?, val time: String,
-    val id: String? = null, val status: String? = null
+    val id: String? = null, val status: String? = null,
+    // Medien überstehen den Neustart: Bytes liegen unter mediaId (siehe MediaFiles)
+    val mediaId: String? = null, val mediaKind: String? = null, val mediaName: String? = null, val mediaMime: String? = null
 )
 
 /**
@@ -41,7 +43,11 @@ object MessageStore {
                     if (o.isNull("l")) null else o.getString("l"),
                     o.optString("ts", ""),
                     if (o.has("id") && !o.isNull("id")) o.getString("id") else null,
-                    if (o.has("st") && !o.isNull("st")) o.getString("st") else null
+                    if (o.has("st") && !o.isNull("st")) o.getString("st") else null,
+                    if (o.has("mid") && !o.isNull("mid")) o.getString("mid") else null,
+                    if (o.has("mk") && !o.isNull("mk")) o.getString("mk") else null,
+                    if (o.has("mn") && !o.isNull("mn")) o.getString("mn") else null,
+                    if (o.has("mm") && !o.isNull("mm")) o.getString("mm") else null
                 )
             }
         } catch (e: Exception) { emptyList() }
@@ -77,6 +83,10 @@ object MessageStore {
             put("ts", m.time)
             put("id", m.id ?: JSONObject.NULL)
             put("st", m.status ?: JSONObject.NULL)
+            put("mid", m.mediaId ?: JSONObject.NULL)
+            put("mk", m.mediaKind ?: JSONObject.NULL)
+            put("mn", m.mediaName ?: JSONObject.NULL)
+            put("mm", m.mediaMime ?: JSONObject.NULL)
         })
         prefs(ctx).edit().putString(pub, arr.toString()).apply()
     }
