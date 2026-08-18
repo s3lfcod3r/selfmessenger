@@ -114,27 +114,69 @@
   .composer{display:flex;gap:6px;margin-top:8px;align-items:center}
   .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
   .badge{display:inline-block;font-size:10.5px;font-family:var(--mono);color:var(--a);border:1px solid var(--a2);border-radius:20px;padding:1px 9px}
+  /* ===== WhatsApp-Stil ===== */
+  body{padding:0;display:block;background:var(--bg)}
+  .app{max-width:520px;margin:0 auto;min-height:100vh;min-height:100dvh;position:relative;display:flex;flex-direction:column;background:var(--bg);overflow:hidden}
+  .screen{display:flex;flex-direction:column;flex:1 1 auto;min-height:100vh;min-height:100dvh}
+  .screen[hidden]{display:none}
+  .appbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;height:56px;padding:0 8px 0 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+  .appbar-title{font-family:var(--wordmark);font-weight:800;font-size:19px;letter-spacing:.01em}
+  .appbar-title .self{color:var(--ice)}.appbar-title .name{color:var(--a)}
+  .appbar-title2{font-size:17px;font-weight:600}
+  .appbar-actions{margin-left:auto;display:flex;gap:2px}
+  .iconbtn{background:none;border:none;color:var(--ink);font-size:20px;width:40px;height:40px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .iconbtn:hover{background:rgba(255,255,255,.06)}
+  .iconbtn:disabled{opacity:.3;cursor:default}
+  .pad{padding:20px}
+  .chatlist{flex:1;overflow:auto}
+  .chat-row{display:flex;align-items:center;gap:14px;padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--line)}
+  .chat-row:hover{background:rgba(255,255,255,.04)}
+  .avatar{width:48px;height:48px;flex:0 0 auto;border-radius:50%;background:linear-gradient(135deg,var(--a2),var(--a-bright));display:flex;align-items:center;justify-content:center;color:#04120d;font-weight:700;font-size:19px}
+  .chat-row .info{flex:1;min-width:0}
+  .chat-row .nm{font-size:16px;color:var(--ink)}
+  .chat-row .sub{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .empty{color:var(--muted);text-align:center;padding:48px 28px;line-height:1.7;font-size:14px}
+  .fab{position:absolute;right:20px;bottom:22px;width:56px;height:56px;border-radius:18px;border:none;background:var(--a);color:#04120d;font-size:30px;line-height:1;cursor:pointer;box-shadow:0 8px 22px -6px rgba(51,167,140,.55);z-index:6;display:flex;align-items:center;justify-content:center}
+  .fab:hover{background:var(--a-bright)}
+  .legal-footer{padding:10px 0}
+  .me-line2{font-family:var(--mono);font-size:12px;color:var(--muted);margin:0 0 14px}
+  .chat-appbar .peer-avatar{width:38px;height:38px;flex:0 0 auto;border-radius:50%;background:linear-gradient(135deg,var(--a2),var(--a-bright));display:flex;align-items:center;justify-content:center;color:#04120d;font-weight:700;font-size:16px}
+  .chat-appbar .peer-meta{flex:1;min-width:0}
+  .peer-name{font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #status{font-size:12px;margin:0;min-height:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .log{flex:1;overflow:auto;display:flex;flex-direction:column;gap:3px;padding:14px 12px;height:auto}
+  .msg{max-width:80%;padding:7px 10px 6px;border-radius:11px;font-size:14.5px;line-height:1.35;word-wrap:break-word}
+  .msg.self{align-self:flex-end;background:#0c3b30;border:1px solid #14523f;border-bottom-right-radius:3px}
+  .msg.them{align-self:flex-start;background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:3px}
+  .msg.sys{align-self:center;background:rgba(255,255,255,.05);color:var(--muted);font-size:11.5px;padding:4px 12px;border-radius:10px;margin:4px 0}
+  .msg .m{display:block;font-size:10px;color:var(--muted);text-align:right;margin-top:2px;opacity:.85;font-family:var(--sans)}
+  .composer{display:flex;gap:6px;align-items:center;padding:8px 10px;margin:0;background:var(--panel);border-top:1px solid var(--line)}
+  .composer .icon{background:none;border:1px solid transparent;color:var(--muted);font-size:20px;width:42px;height:42px;border-radius:50%;padding:0}
+  .composer .icon:hover{color:var(--ink)}
+  .composer input#in{flex:1;min-width:0;background:#0c1620;border:1px solid var(--line);border-radius:22px;padding:11px 16px;color:var(--ink);font-size:15px;font-family:var(--sans);height:auto}
+  .composer .send-btn{background:var(--a);color:#04120d;width:44px;height:44px;border-radius:50%;font-size:18px;border:none;font-weight:700}
+  .safety{margin:0!important;border-radius:0!important;border-left:none!important;border-right:none!important;border-top:none!important;text-align:center;font-size:11px}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <!-- ===== SETUP / KONTAKTE ===== -->
-  <div id="setupScreen">
-    <header class="app-head">
-      <img class="head-logo" src="brand/shield.png" alt="" />
-      <div class="head-id">
-        <span class="wordmark"><span class="self">Self</span><span class="name">Messenger</span></span>
-        <span class="head-me" id="meLine">…</span>
+<div class="app">
+  <!-- ===== CHATS (Start) ===== -->
+  <div id="screenChats" class="screen">
+    <div class="appbar">
+      <span class="appbar-title"><span class="self">Self</span><span class="name">Messenger</span></span>
+      <div class="appbar-actions">
+        <button class="iconbtn" id="btnMyCode" title="Mein Code">🔗</button>
       </div>
-    </header>
-
-    <div class="actions">
-      <button class="action" id="btnMyCode"><span class="ic">📤</span>Mein Code</button>
-      <button class="action" id="btnAddFriend"><span class="ic">➕</span>Freund</button>
     </div>
+    <div class="chatlist" id="contacts"><div class="empty">Noch keine Chats.<br />Tippe <b>＋</b> und tauscht eure Codes persönlich.</div></div>
+    <button class="fab" id="btnAddFriend" title="Freund hinzufügen">＋</button>
+  </div>
 
-    <section class="panel" id="panelMyCode" hidden>
-      <div class="panel-h">Dein Pairing-Code</div>
+  <!-- ===== MEIN CODE ===== -->
+  <div id="screenCode" class="screen" hidden>
+    <div class="appbar"><button class="iconbtn" data-back="screenChats">←</button><span class="appbar-title2">Mein Code</span></div>
+    <div class="pad">
+      <p class="me-line2" id="meLine">…</p>
       <div class="qr-wrap"><div id="qr"></div></div>
       <p class="hint">Freund scannt den QR — oder schick ihm den Code:</p>
       <div class="share-row">
@@ -144,50 +186,48 @@
       <input type="text" id="myCode" class="code-field" readonly />
       <div class="rename">
         <input type="text" id="nameInput" placeholder="Dein Name" />
-        <button class="btn-ghost" id="saveName">Name speichern</button>
+        <button class="btn-ghost" id="saveName">Speichern</button>
       </div>
-    </section>
+      <p class="legal-footer"><a href="/impressum">Impressum</a> · <a href="/datenschutz">Datenschutz</a></p>
+    </div>
+  </div>
 
-    <section class="panel" id="panelAddFriend" hidden>
-      <div class="panel-h">Freund hinzufügen</div>
+  <!-- ===== FREUND HINZUFÜGEN ===== -->
+  <div id="screenAdd" class="screen" hidden>
+    <div class="appbar"><button class="iconbtn" data-back="screenChats">←</button><span class="appbar-title2">Freund hinzufügen</span></div>
+    <div class="pad">
+      <p class="hint" style="text-align:left;margin-top:0">Füge den Code deines Freundes ein (den er dir per „Teilen" geschickt hat) — oder haltet eure Handys aneinander (NFC).</p>
       <textarea id="addCode" placeholder="Code des Freundes hier einfügen"></textarea>
       <button class="btn-primary block" id="addBtn">Als Freund speichern</button>
-      <p class="hint">📲 Oder haltet eure Handys aneinander (NFC) — der Code wird automatisch übernommen.</p>
-    </section>
-
-    <div class="contacts-h">Kontakte<button class="refresh" id="refreshBtn" title="Aktualisieren">↻</button></div>
-    <div id="contacts"><div class="empty">Noch keine Freunde.<br />Tippe <b>„Freund"</b> und tauscht eure Codes.</div></div>
-
-    <p class="legal-footer">
-      <a href="/impressum">Impressum</a> · <a href="/datenschutz">Datenschutz</a>
-    </p>
+    </div>
   </div>
 
   <!-- ===== CHAT ===== -->
-  <div id="chatScreen">
-    <div class="top">
-      <button class="ghost" id="back" style="height:34px">← Kontakte</button>
-      <h1 style="font-size:16px;margin:0" id="peerName">Chat</h1>
-      <span class="badge" id="me">Gerät</span>
-    </div>
-    <div class="card">
-      <p class="status" id="status">…</p>
-      <div class="safety" id="safety"></div>
-      <div class="call" id="callPanel">
-        <div class="videos"><video id="localVideo" autoplay muted playsinline></video><video id="remoteVideo" autoplay playsinline></video></div>
-        <div class="callbar"><span class="st" id="callState">Anruf</span><button class="icon rec" id="hangup">⏹ Auflegen</button></div>
+  <div id="chatScreen" class="screen" hidden>
+    <div class="appbar chat-appbar">
+      <button class="iconbtn" id="back">←</button>
+      <div class="peer-avatar" id="peerAvatar">?</div>
+      <div class="peer-meta">
+        <div class="peer-name" id="peerName">Chat</div>
+        <div class="status" id="status">verbinde…</div>
       </div>
-      <div class="log" id="log"></div>
-      <div class="composer">
-        <button class="icon" id="attach" title="Bild/Datei" disabled>📎</button>
-        <button class="icon" id="recBtn" title="Sprachnachricht" disabled>🎤</button>
-        <button class="icon" id="callAudio" title="Anrufen" disabled>📞</button>
-        <button class="icon" id="callVideo" title="Videoanruf" disabled>📹</button>
-        <input type="text" id="in" placeholder="Nachricht…" disabled />
-        <button id="send" disabled>➤</button>
-      </div>
-      <input type="file" id="file" style="display:none" />
+      <button class="iconbtn" id="callAudio" title="Anrufen" disabled>📞</button>
+      <button class="iconbtn" id="callVideo" title="Videoanruf" disabled>📹</button>
+      <span id="me" hidden></span>
     </div>
+    <div class="safety" id="safety"></div>
+    <div class="call" id="callPanel">
+      <div class="videos"><video id="localVideo" autoplay muted playsinline></video><video id="remoteVideo" autoplay playsinline></video></div>
+      <div class="callbar"><span class="st" id="callState">Anruf</span><button class="icon rec" id="hangup">⏹ Auflegen</button></div>
+    </div>
+    <div class="log" id="log"></div>
+    <div class="composer">
+      <button class="icon" id="attach" title="Bild/Datei" disabled>📎</button>
+      <button class="icon" id="recBtn" title="Sprachnachricht" disabled>🎤</button>
+      <input type="text" id="in" placeholder="Nachricht" disabled />
+      <button class="icon send-btn" id="send" disabled>➤</button>
+    </div>
+    <input type="file" id="file" style="display:none" />
   </div>
 </div>
 <script>
@@ -231,16 +271,17 @@ function addContactFromCode(code){ const o=decodePayload(code); if(!o){ alert('U
   if(o.k===identity.pubB64){ alert('Das ist dein eigener Code.'); return false; }
   let cs=loadContacts(); if(!cs.find(c=>c.k===o.k)){ cs.push({n:o.n,k:o.k}); saveContacts(cs); }
   renderContacts(); return true; }
+function initialOf(n){ return ((n||'?').trim().charAt(0)||'?').toUpperCase(); }
+function showScreen(id){ ['screenChats','screenCode','screenAdd','chatScreen'].forEach(s=>{ $(s).hidden=(s!==id); }); }
 async function renderContacts(){
   const cs=loadContacts(), el=$('contacts');
-  if(!cs.length){ el.innerHTML='<div class="empty">Noch keine Freunde.<br />Tippe <b>„Freund"</b> und tauscht eure Codes.</div>'; return; }
+  if(!cs.length){ el.innerHTML='<div class="empty">Noch keine Chats.<br />Tippe <b>＋</b> und tauscht eure Codes persönlich.</div>'; return; }
   el.innerHTML='';
-  for(const c of cs){ const fp=await fpOf(c.k);
-    const nm=(c.n||'?').replace(/</g,'&lt;'); const initial=(c.n||'?').trim().charAt(0).toUpperCase()||'?';
-    const row=document.createElement('div'); row.className='contact'; row.title='Mit '+nm+' verbinden';
-    row.innerHTML='<div class="avatar">'+initial+'</div>'+
-      '<div class="info"><div class="nm">'+nm+'</div><div class="fp">🔑 '+fp+'</div></div>'+
-      '<div class="chev">›</div>';
+  for(const c of cs){
+    const nm=(c.n||'?').replace(/</g,'&lt;');
+    const row=document.createElement('div'); row.className='chat-row'; row.title='Mit '+nm+' verbinden';
+    row.innerHTML='<div class="avatar">'+initialOf(c.n)+'</div>'+
+      '<div class="info"><div class="nm">'+nm+'</div><div class="sub">🔒 Ende-zu-Ende verschlüsselt</div></div>';
     row.onclick=()=>connectToContact(c); el.appendChild(row); }
 }
 
@@ -271,10 +312,11 @@ let iAmInitiator=false, selfAcct=null, ratchet=null, ratchetReady=false, olmRead
 window.__rendezvous=null;
 function wsSend(o){ws.send(JSON.stringify(o));}
 async function connectToContact(c){
-  currentContact=c; session=null; window.__remoteKinds=[];
+  currentContact=c; session=null; ratchetReady=false; window.ratchetReady=false; ratchet=null; window.__remoteKinds=[];
   const room=await rendezvous(identity.pubB64,c.k); window.__rendezvous=room;
-  $('setupScreen').style.display='none'; $('chatScreen').style.display='block';
-  $('peerName').textContent=c.n; $('log').innerHTML='';
+  $('peerName').textContent=c.n; $('peerAvatar').textContent=initialOf(c.n);
+  $('safety').style.display='none'; $('log').innerHTML='';
+  showScreen('chatScreen');
   connect(room);
 }
 function connect(room){
@@ -401,8 +443,9 @@ async function sendBytes(bytes,kind,name,mime){ const id=(crypto.randomUUID&&cry
   window.__lastSent={hash:await sha(bytes),size:bytes.length,name};
   renderMedia(bubble,meta,new Blob([bytes],{type:meta.mime})); return window.__lastSent.hash; }
 async function sendFileLike(file,kind){ await sendBytes(new Uint8Array(await file.arrayBuffer()),kind,file.name,file.type); }
+function nowTime(){ const d=new Date(); return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0'); }
 function addTextBubble(who,text,meta){ const d=document.createElement('div'); d.className='msg '+who; d.textContent=text;
-  const s=document.createElement('span'); s.className='m'; s.textContent=meta; d.appendChild(s); $('log').appendChild(d); $('log').scrollTop=$('log').scrollHeight; return d; }
+  const s=document.createElement('span'); s.className='m'; s.textContent=nowTime(); d.appendChild(s); $('log').appendChild(d); $('log').scrollTop=$('log').scrollHeight; return d; }
 function addSys(text){ const d=document.createElement('div'); d.className='msg sys'; d.textContent=text; $('log').appendChild(d); $('log').scrollTop=$('log').scrollHeight; }
 function addMediaBubble(who,meta,wp){ const d=document.createElement('div'); d.className='msg '+who; d.dataset.kind=meta.kind;
   const label={image:'🖼 Bild',voice:'🎤 Sprachnachricht',file:'📎 '+(meta.name||'Datei')}[meta.kind]||'Datei';
@@ -455,20 +498,14 @@ function renderIdentity(){ $('meLine').innerHTML='<b>'+identity.name.replace(/</
   $('nameInput').value=identity.name; $('myCode').value=myPayload();
   const qr=qrcode(0,'M'); qr.addData(myPayload()); qr.make(); $('qr').innerHTML=qr.createImgTag(6,0);
   fpOf(identity.pubB64).then(fp=>{ $('meLine').innerHTML='<b>'+identity.name.replace(/</g,'&lt;')+'</b> · 🔑 '+fp; }); }
-function togglePanel(which){
-  const mc=$('panelMyCode'), af=$('panelAddFriend');
-  const showMc=which==='mycode'&&mc.hidden, showAf=which==='addfriend'&&af.hidden;
-  mc.hidden=!showMc; af.hidden=!showAf;
-  $('btnMyCode').classList.toggle('on',showMc); $('btnAddFriend').classList.toggle('on',showAf);
-}
 async function copyMyCode(btnId,label){
   const code=myPayload();
   try{ await navigator.clipboard.writeText(code); }catch(_){ $('myCode').select(); try{document.execCommand('copy');}catch(e){} }
   $(btnId).textContent='kopiert ✓'; setTimeout(()=>$(btnId).textContent=label,1400);
 }
-$('btnMyCode').onclick=()=>togglePanel('mycode');
-$('btnAddFriend').onclick=()=>togglePanel('addfriend');
-$('refreshBtn').onclick=()=>renderContacts();
+$('btnMyCode').onclick=()=>showScreen('screenCode');
+$('btnAddFriend').onclick=()=>showScreen('screenAdd');
+document.querySelectorAll('[data-back]').forEach(b=>b.onclick=()=>showScreen(b.dataset.back));
 $('saveName').onclick=()=>{ setName($('nameInput').value.trim()); renderIdentity(); };
 $('copyCode').onclick=()=>copyMyCode('copyCode','⧉ Kopieren');
 $('shareCode').onclick=async()=>{
@@ -476,9 +513,9 @@ $('shareCode').onclick=async()=>{
   if(navigator.share){ try{ await navigator.share({title:'SelfMessenger',text:msg}); return; }catch(err){ if(err&&err.name==='AbortError') return; } }
   copyMyCode('shareCode','📤 Teilen');
 };
-$('addBtn').onclick=()=>{ if(addContactFromCode($('addCode').value)){ $('addCode').value=''; togglePanel(null); } };
-$('back').onclick=()=>{ try{ pc&&pc.close(); ws&&ws.close(); }catch(_){} session=null;
-  $('chatScreen').style.display='none'; $('setupScreen').style.display='block'; renderContacts(); };
+$('addBtn').onclick=()=>{ if(addContactFromCode($('addCode').value)){ $('addCode').value=''; renderContacts(); showScreen('screenChats'); } };
+$('back').onclick=()=>{ try{ pc&&pc.close(); ws&&ws.close(); }catch(_){} session=null; ratchetReady=false;
+  showScreen('screenChats'); renderContacts(); };
 $('send').onclick=sendChat; $('in').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat();});
 $('attach').onclick=()=>$('file').click();
 $('file').onchange=e=>{ const f=e.target.files[0]; if(!f) return; sendFileLike(f,f.type.startsWith('image/')?'image':'file'); e.target.value=''; };
