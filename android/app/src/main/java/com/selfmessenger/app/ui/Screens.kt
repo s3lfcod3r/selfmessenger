@@ -39,12 +39,16 @@ import com.selfmessenger.app.Config
 import com.selfmessenger.app.Contact
 import com.selfmessenger.app.Contacts
 import com.selfmessenger.app.Identity
+import com.selfmessenger.app.AckBus
+import com.selfmessenger.app.AppState
 import com.selfmessenger.app.Me
 import com.selfmessenger.app.MessageStore
 import com.selfmessenger.app.OfflineBus
+import com.selfmessenger.app.PendingRead
 import com.selfmessenger.app.Qr
 import com.selfmessenger.app.Settings
 import com.selfmessenger.app.StoredMsg
+import com.selfmessenger.app.net.MailboxPost
 import com.selfmessenger.app.media.VoicePlayer
 import com.selfmessenger.app.media.VoiceRecorder
 import com.selfmessenger.app.net.Connection
@@ -334,7 +338,7 @@ private fun AddFriendScreen(onBack: () -> Unit) {
 // ================= Chat =================
 
 private data class MediaData(val kind: String, val name: String, val mime: String, val bytes: ByteArray)
-private data class ChatItem(val fromMe: Boolean, val text: String? = null, val media: MediaData? = null, val time: String = nowTime())
+private data class ChatItem(val fromMe: Boolean, val text: String? = null, val media: MediaData? = null, val time: String = nowTime(), val id: String? = null, val status: String? = null)
 private data class CallUi(val video: Boolean, val incoming: Boolean, val muted: Boolean = false, val camOff: Boolean = false)
 
 @Composable
@@ -350,19 +354,24 @@ private fun ChatScreen(me: Me, contact: Contact, onBack: () -> Unit) {
     val messages = remember {
         mutableStateListOf<ChatItem>().also { list ->
             if (Settings.saveHistoryFor(ctx, contact.pubB64))
-                MessageStore.load(ctx, contact.pubB64).forEach { list.add(ChatItem(it.fromMe, text = it.text ?: it.label, time = it.time)) }
+                MessageStore.load(ctx, contact.pubB64).forEach { list.add(ChatItem(it.fromMe, text = it.text ?: it.label, time = it.time, id = it.id, status = it.status)) }
         }
     }
     val listState = rememberLazyListState()
     fun persist(item: ChatItem, label: String?) {
         if (Settings.saveHistoryFor(ctx, contact.pubB64))
-            MessageStore.append(ctx, contact.pubB64, StoredMsg(item.fromMe, item.text, label, item.time))
+            MessageStore.append(ctx, contact.pubB64, StoredMsg(item.fromMe, item.text, label, item.time, item.id, item.status))
+    }
+    fun updateStatus(id: String, s: String) {
+        val i = messages.indexOfFirst { it.id == id }
+        if (i >= 0 && rankStatus(s) > rankStatus(messages[i].status)) messages[i] = messages[i].copy(status = s)
+        MessageStore.updateStatus(ctx, contact.pubB64, id, s)
     }
 
     val conn = remember {
         Connection(ctx.applicationContext, me, contact, Config.SIGNALING_URL,
             onStatus = { status = it },
-            onMessage = { fromMe, text -> val item = ChatItem(fromMe, text = text); messages.add(item); persist(item, null) })
+            onMessage = { fromMe, text, id -> val item = ChatItem(fromMe, text = text, id = id, status = if (fromMe) "pending" else null); messages.add(item); persist(item, null) })
     }
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) readPicked(ctx, uri)?.let { (n, mime, b) -> conn.sendMedia("image", n, mime, b) }
@@ -393,14 +402,23 @@ private fun ChatScreen(me: Me, contact: Contact, onBack: () -> Unit) {
         conn.onIncomingCall = { video -> if (call == null) call = CallUi(video = video, incoming = true) else if (video) call = call!!.copy(video = true) }
         conn.onCallConnected = { call = call?.copy(incoming = false) }
         conn.onCallEnded = { call = null; localVideo = null; remoteVideo = null }
+        conn.onSentStatus = { id, s -> updateStatus(id, s) }
         conn.start()
-        onDispose { conn.close() }
+        // Diesen Chat als „offen" markieren + offene Lesebestätigungen nachsenden
+        AppState.openChatPub = contact.pubB64
+        val pending = PendingRead.take(contact.pubB64)
+        if (pending.isNotEmpty()) Thread { pending.forEach { MailboxPost.sendAck(me, Config.SIGNALING_URL, contact.pubB64, it, "r") } }.start()
+        onDispose { if (AppState.openChatPub == contact.pubB64) AppState.openChatPub = null; conn.close() }
     }
     LaunchedEffect(messages.size) { if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1) }
     // Offline zugestellte Nachricht live einblenden, wenn dieser Chat gerade offen ist
     // (persistiert wird sie bereits app-global in MainNav).
     LaunchedEffect(contact.pubB64) {
         OfflineBus.events.collect { (pub, text) -> if (pub == contact.pubB64) messages.add(ChatItem(false, text = text)) }
+    }
+    // Status-Haken aus Offline-Bestätigungen (zugestellt/gelesen) aktualisieren
+    LaunchedEffect(contact.pubB64) {
+        AckBus.events.collect { (pub, id, s) -> if (pub == contact.pubB64) updateStatus(id, s) }
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -454,7 +472,13 @@ private fun MessageBubble(item: ChatItem) {
                     item.text != null -> Text(item.text, fontSize = 15.sp, color = SelfText)
                     item.media != null -> MediaContent(item.media)
                 }
-                Text(item.time, fontSize = 10.sp, color = SelfMuted, modifier = Modifier.align(Alignment.End).padding(top = 2.dp))
+                Row(Modifier.align(Alignment.End).padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(item.time, fontSize = 10.sp, color = SelfMuted)
+                    if (mine && item.status != null) {
+                        Spacer(Modifier.width(3.dp))
+                        Text(tickGlyph(item.status), fontSize = 10.sp, color = if (item.status == "read") Color(0xFF53BDEB) else SelfMuted)
+                    }
+                }
             }
         }
     }
@@ -483,6 +507,13 @@ private fun mediaLabel(kind: String, name: String): String = when (kind) {
     "image" -> "🖼 Bild"
     "voice" -> "🎤 Sprachnachricht"
     else -> "📎 $name"
+}
+
+private fun tickGlyph(status: String?): String = when (status) {
+    "pending" -> "🕓"; "sent" -> "✓"; "delivered", "read" -> "✓✓"; "fail" -> "⚠"; else -> ""
+}
+private fun rankStatus(status: String?): Int = when (status) {
+    "sent" -> 1; "delivered" -> 2; "read" -> 3; else -> 0
 }
 
 @Composable

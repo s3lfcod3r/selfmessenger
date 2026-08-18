@@ -20,8 +20,10 @@ class Connection(
     private val contact: Contact,
     private val signalingBaseUrl: String,
     private val onStatus: (String) -> Unit,
-    private val onMessage: (fromMe: Boolean, text: String) -> Unit
+    private val onMessage: (fromMe: Boolean, text: String, id: String) -> Unit
 ) {
+    // Status-Haken für MEINE gesendeten Nachrichten (id -> "sent"/"delivered"/"read"/"fail")
+    var onSentStatus: ((id: String, status: String) -> Unit)? = null
     private var signaling: Signaling? = null
     private var rtc: WebRtcClient? = null
     private var crypto: CryptoSession? = null
@@ -93,24 +95,25 @@ class Connection(
         ui { onStatus("✓ Ende-zu-Ende · $sn") }
     }
 
-    fun sendText(text: String) {
+    /** Sendet Text, liefert die Nachrichten-ID zurück (für die Status-Haken). */
+    fun sendText(text: String): String {
+        val id = java.util.UUID.randomUUID().toString()
         val c = crypto
         if (c != null) {                                  // live: über die Direktverbindung
             val (iv, ct) = c.encrypt(text.toByteArray(Charsets.UTF_8))
-            rtc?.sendText(JSONObject().put("t", "msg").put("iv", iv).put("ct", ct).toString())
-            ui { onMessage(true, text) }
-        } else if (signaling != null) {                   // Partner offline: verschlüsselt in den Briefkasten
-            if (!com.selfmessenger.app.Settings.offlineMailboxFor(ctx, contact.pubB64)) {
-                ui { onMessage(true, "$text  ✗ (nicht zugestellt – Person offline, Zwischenlagern aus)") }
-                return
-            }
-            val s = CryptoSession.derive(me.privateKey, contact.pubB64)
-            val (iv, ct) = s.encrypt(text.toByteArray(Charsets.UTF_8))
-            val blob = JSONObject().put("iv", iv).put("ct", ct)
-            signaling?.send(JSONObject().put("type", "store")
-                .put("mailbox", CryptoSession.mailboxId(contact.pubB64)).put("blob", blob))
-            ui { onMessage(true, "$text  ✉ (offline hinterlegt)") }
+            rtc?.sendText(JSONObject().put("t", "msg").put("id", id).put("iv", iv).put("ct", ct).toString())
+            ui { onMessage(true, text, id); onSentStatus?.invoke(id, "sent") }
+        } else if (com.selfmessenger.app.Settings.offlineMailboxFor(ctx, contact.pubB64)) {   // offline: direkt in den Briefkasten
+            ui { onMessage(true, text, id) }
+            Thread {
+                MailboxPost.postEnvelope(me, signalingBaseUrl, contact.pubB64,
+                    JSONObject().put("t", "m").put("id", id).put("body", text))
+                ui { onSentStatus?.invoke(id, "sent") }
+            }.start()
+        } else {                                          // Zwischenlagern aus -> nicht zustellbar
+            ui { onMessage(true, text, id); onSentStatus?.invoke(id, "fail") }
         }
+        return id
     }
 
     /** Bild/Datei/Sprachnachricht senden: verschlüsselt, in Häppchen (wie Web-Client). */
@@ -136,10 +139,19 @@ class Connection(
         val m = JSONObject(json)
         when (m.optString("t")) {
             "bye" -> { callActive = false; callVideo = false; rtc?.hangupCall(); ui { onCallEnded?.invoke() } }
+            "ack" -> {
+                val id = m.optString("id"); val s = m.optString("s")
+                if (id.isNotEmpty()) ui { onSentStatus?.invoke(id, if (s == "r") "read" else "delivered") }
+            }
             "msg" -> {
                 val c = crypto ?: return
                 val plain = String(c.decrypt(m.getString("iv"), m.getString("ct")), Charsets.UTF_8)
-                ui { onMessage(false, plain) }
+                val id = m.optString("id", "")
+                ui { onMessage(false, plain, id) }
+                if (id.isNotEmpty()) {                    // live empfangen -> zugestellt + gelesen (Chat ist offen)
+                    rtc?.sendText(JSONObject().put("t", "ack").put("id", id).put("s", "d").toString())
+                    rtc?.sendText(JSONObject().put("t", "ack").put("id", id).put("s", "r").toString())
+                }
             }
             "meta" -> incoming[m.getString("id")] =
                 MediaAcc(m.getString("kind"), m.getString("name"), m.getString("mime"), m.getInt("total"))

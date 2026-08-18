@@ -4,8 +4,12 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import com.google.firebase.messaging.FirebaseMessaging
+import com.selfmessenger.app.AckBus
+import com.selfmessenger.app.AppState
+import com.selfmessenger.app.Contact
 import com.selfmessenger.app.Contacts
 import com.selfmessenger.app.Me
+import com.selfmessenger.app.PendingRead
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -54,14 +58,33 @@ class MailboxClient(
         val items = m.getJSONArray("items")
         for (i in 0 until items.length()) {
             val blob = items.getJSONObject(i)
-            for (c in Contacts.all(ctx)) {                 // Probe-Entschlüsselung
-                try {
+            for (c in Contacts.all(ctx)) {                 // Probe-Entschlüsselung: nur der echte Absender passt
+                val raw = try {
                     val session = CryptoSession.derive(me.privateKey, c.pubB64)
-                    val plain = String(session.decrypt(blob.getString("iv"), blob.getString("ct")), Charsets.UTF_8)
-                    main.post { onOfflineMessage(c.name, plain) }
-                    break
-                } catch (_: Exception) { /* falscher Kontakt -> weiter */ }
+                    String(session.decrypt(blob.getString("iv"), blob.getString("ct")), Charsets.UTF_8)
+                } catch (_: Exception) { continue }
+                handleEnvelope(c, raw)
+                break
             }
+        }
+    }
+
+    /** Umschlag: entweder echte Nachricht ({t:"m",id,body}) oder Status-Bestätigung ({t:"a",id,s}). */
+    private fun handleEnvelope(c: Contact, raw: String) {
+        val env = try { JSONObject(raw) } catch (_: Exception) { JSONObject().put("t", "m").put("body", raw) }
+        if (env.optString("t") == "a") {                   // Bestätigung für eine von MIR gesendete Nachricht
+            val id = env.optString("id"); val s = env.optString("s")
+            if (id.isNotEmpty()) AckBus.emit(c.pubB64, id, if (s == "r") "read" else "delivered")
+            return
+        }
+        // echte Nachricht
+        val id = env.optString("id", "")
+        val body = if (env.has("body")) env.getString("body") else raw
+        main.post { onOfflineMessage(c.name, body) }
+        if (id.isNotEmpty()) {                             // zugestellt bestätigen; gelesen, wenn dieser Chat offen ist
+            MailboxPost.sendAckAsync(me, baseUrl, c.pubB64, id, "d")
+            if (AppState.openChatPub == c.pubB64) MailboxPost.sendAckAsync(me, baseUrl, c.pubB64, id, "r")
+            else PendingRead.add(c.pubB64, id)
         }
     }
 
