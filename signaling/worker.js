@@ -54,7 +54,7 @@ export class Room {
 
 // --- Briefkasten: lagert verschlüsselte Blobs für offline-Empfänger, liefert bei Anmeldung ---
 export class Mailbox {
-  constructor(state, env) { this.state = state; this.ws = null; }
+  constructor(state, env) { this.state = state; this.env = env; this.ws = null; }
 
   async fetch(req) {
     const url = new URL(req.url);
@@ -63,6 +63,9 @@ export class Mailbox {
       if (this.ws) { try { this.ws.send(JSON.stringify({ type: 'mail', items: [blob] })); return new Response('sent'); } catch (_) {} }
       const q = (await this.state.storage.get('q')) || [];
       q.push(blob); await this.state.storage.put('q', q);
+      // Empfänger ist offline -> Push wecken (Inhaltslos; Text liegt verschlüsselt im Briefkasten).
+      const token = await this.state.storage.get('token');
+      if (token) { try { await sendPush(this.env, token); } catch (_) {} }
       return new Response('queued');
     }
     if (req.headers.get('Upgrade') !== 'websocket') return new Response('expected websocket', { status: 426 });
@@ -70,7 +73,67 @@ export class Mailbox {
     server.accept(); this.ws = server;
     const q = (await this.state.storage.get('q')) || [];
     if (q.length) { server.send(JSON.stringify({ type: 'mail', items: q })); await this.state.storage.delete('q'); }
+    server.addEventListener('message', async (evt) => {                 // Push-Token anmelden
+      let m = null; try { m = JSON.parse(evt.data); } catch (_) {}
+      if (m && m.type === 'pushtoken' && m.token) await this.state.storage.put('token', m.token);
+    });
     server.addEventListener('close', () => { if (this.ws === server) this.ws = null; });
     return new Response(null, { status: 101, webSocket: client });
   }
+}
+
+// ===== FCM-Push (HTTP v1) — weckt die geschlossene App, ohne Inhalt zu übertragen =====
+// Braucht das Dienstkonto (Service Account) als Worker-Secret FCM_SA (JSON-String).
+let _fcmToken = null; // { access_token, exp } je Worker-Instanz zwischengespeichert
+async function sendPush(env, token) {
+  if (!env.FCM_SA) return;                       // ohne Dienstkonto: still nichts tun
+  const sa = typeof env.FCM_SA === 'string' ? JSON.parse(env.FCM_SA) : env.FCM_SA;
+  const access = await fcmAccessToken(sa);
+  await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${access}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: {
+        token,
+        data: { title: 'SelfMessenger', body: 'Neue Nachricht' },
+        android: { priority: 'high' }
+      }
+    })
+  });
+}
+
+async function fcmAccessToken(sa) {
+  const now = Math.floor(Date.now() / 1000);
+  if (_fcmToken && _fcmToken.exp > now + 60) return _fcmToken.access_token;
+  const header = { alg: 'RS256', typ: 'JWT' };
+  const claim = {
+    iss: sa.client_email,
+    scope: 'https://www.googleapis.com/auth/firebase.messaging',
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now, exp: now + 3600
+  };
+  const unsigned = b64url(new TextEncoder().encode(JSON.stringify(header))) + '.' +
+                   b64url(new TextEncoder().encode(JSON.stringify(claim)));
+  const key = await importPkcs8(sa.private_key);
+  const sig = await crypto.subtle.sign({ name: 'RSASSA-PKCS1-v1_5' }, key, new TextEncoder().encode(unsigned));
+  const jwt = unsigned + '.' + b64url(new Uint8Array(sig));
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`
+  });
+  const j = await res.json();
+  _fcmToken = { access_token: j.access_token, exp: now + 3500 };
+  return j.access_token;
+}
+
+async function importPkcs8(pem) {
+  const body = pem.replace(/-----BEGIN PRIVATE KEY-----/, '').replace(/-----END PRIVATE KEY-----/, '').replace(/\s+/g, '');
+  const der = Uint8Array.from(atob(body), c => c.charCodeAt(0));
+  return crypto.subtle.importKey('pkcs8', der.buffer, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+}
+
+function b64url(bytes) {
+  let s = btoa(String.fromCharCode(...bytes));
+  return s.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }

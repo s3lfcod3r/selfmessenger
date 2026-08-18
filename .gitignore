@@ -16,3 +16,5 @@ android/local.properties
 keystore.properties
 .env
 .dev.vars
+# Firebase-Client-Konfiguration (steckt ohnehin in der APK; hier nicht ins öffentliche Repo)
+android/app/google-services.json

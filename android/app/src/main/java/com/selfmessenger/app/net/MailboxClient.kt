@@ -3,6 +3,7 @@ package com.selfmessenger.app.net
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import com.google.firebase.messaging.FirebaseMessaging
 import com.selfmessenger.app.Contacts
 import com.selfmessenger.app.Me
 import okhttp3.OkHttpClient
@@ -31,8 +32,20 @@ class MailboxClient(
         val mbx = CryptoSession.mailboxId(me.pubB64)
         val req = Request.Builder().url("$baseUrl?mbx=$mbx").build()
         ws = client.newWebSocket(req, object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) = registerPush(webSocket)
             override fun onMessage(webSocket: WebSocket, text: String) = handle(text)
         })
+    }
+
+    /** FCM-Token holen und beim eigenen Briefkasten anmelden → Push, wenn App zu ist. */
+    private fun registerPush(webSocket: WebSocket) {
+        try {
+            FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+                if (token.isNullOrBlank()) return@addOnSuccessListener
+                PushToken.set(ctx, token)
+                try { webSocket.send(JSONObject().put("type", "pushtoken").put("token", token).toString()) } catch (_: Exception) {}
+            }
+        } catch (_: Exception) { /* Firebase nicht verfügbar -> ohne Push weiter */ }
     }
 
     private fun handle(text: String) {

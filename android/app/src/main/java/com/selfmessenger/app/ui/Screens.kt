@@ -112,6 +112,14 @@ private fun MainNav(onPrepareVpn: ((Boolean) -> Unit) -> Unit) {
     var screen by remember { mutableStateOf("chats") }   // chats | mycode | add | settings | vpn
     var chatWith by remember { mutableStateOf<Contact?>(null) }
 
+    // Benachrichtigungs-Erlaubnis (Android 13+) für Push einholen
+    val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    LaunchedEffect(Unit) {
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+            notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
     DisposableEffect(Unit) {
         val mbx = MailboxClient(ctx.applicationContext, me, Config.SIGNALING_URL) { from, text ->
             // Offline-Nachricht: in den Verlauf des passenden Kontakts legen (falls Speichern an) + Hinweis.

@@ -5,6 +5,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.gms.google-services")
 }
 
 // Release-Signatur aus keystore.properties (im Projekt-Root, gitignored). Fehlt sie,
@@ -21,8 +22,8 @@ android {
         applicationId = "com.selfmessenger.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "0.1.4"
+        versionCode = 6
+        versionName = "0.1.5"
     }
     signingConfigs {
         // Android-Standard-Debug-Keystore aus der Toolchain (Passwort "android" ist kein Secret).
@@ -84,4 +85,7 @@ dependencies {
     implementation("io.getstream:stream-webrtc-android:1.3.8")
     // WireGuard-Tunnel (VPN: IP verstecken, Mullvad/eigenes) — bringt libwg-go.so mit
     implementation("com.wireguard.android:tunnel:1.0.20230706")
+    // Push für geschlossene App (FCM sieht nur "neue Nachricht", keinen Inhalt)
+    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
+    implementation("com.google.firebase:firebase-messaging")
 }
