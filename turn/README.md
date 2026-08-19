@@ -77,3 +77,21 @@ Jetzt muss neben STUN ein `turn:`-Eintrag mit `username` (Ablauf-Zeitstempel) un
 **Sicherheit:** Die Konfiguration verweigert Relays in private/Loopback/Metadaten-Bereiche,
 damit dein TURN nicht als Innen-Proxy in dein LAN missbraucht werden kann. Zugangsdaten
 sind kurzlebig (24 h) und werden serverseitig aus dem Geheimnis gemintet.
+
+---
+
+## Alternative: gehostetes TURN (kein eigener Server)
+
+Wer keinen eigenen Relay betreiben will, kann ein kostenloses gehostetes TURN nutzen
+(z. B. ExpressTURN-Free: 1000 GB/Monat, Port 3478 UDP/TCP + 80/443). Der Relay sieht
+weiterhin nur verschlüsselten Verkehr und speichert nichts. Man legt ein Konto an und
+bekommt **feste Zugangsdaten** (Benutzer + Passwort). Diese als drei Worker-Secrets setzen:
+
+```bash
+npx wrangler secret put TURN_URL    # z. B. turn:relay.expressturn.com:3478?transport=udp,turn:relay.expressturn.com:3478?transport=tcp
+npx wrangler secret put TURN_USER   # Benutzername vom Anbieter
+npx wrangler secret put TURN_PASS   # Passwort vom Anbieter
+```
+
+Der Worker liefert diese festen Zugangsdaten dann über `/turn` aus (Modus 1b). Ohne die
+Secrets bleibt es bei STUN. Genau wie beim eigenen coturn ist **kein App-/Web-Update** nötig.

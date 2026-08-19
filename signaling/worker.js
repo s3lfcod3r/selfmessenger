@@ -27,8 +27,8 @@ export default {
     if (url.pathname === '/turn') {
       const cors = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' };
       const ice = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
-      // 1) Selbstgehostetes coturn (kostenlos) — Standard-REST-Format „use-auth-secret":
-      //    username = Ablauf-Unixzeit, credential = base64(HMAC-SHA1(secret, username)). TURN_URL kommagetrennt.
+      // 1a) Selbstgehostetes coturn (kostenlos) — Standard-REST-Format „use-auth-secret":
+      //     username = Ablauf-Unixzeit, credential = base64(HMAC-SHA1(secret, username)). TURN_URL kommagetrennt.
       if (env.TURN_URL && env.TURN_SECRET) {
         try {
           const username = String(Math.floor(Date.now() / 1000) + 86400);
@@ -38,6 +38,11 @@ export default {
           const urls = env.TURN_URL.split(',').map(s => s.trim()).filter(Boolean);
           ice.push({ urls, username, credential });
         } catch (_) {}
+      }
+      // 1b) Gehostetes TURN mit festen Zugangsdaten (z. B. ExpressTURN-Free): TURN_URL + TURN_USER + TURN_PASS.
+      else if (env.TURN_URL && env.TURN_USER && env.TURN_PASS) {
+        const urls = env.TURN_URL.split(',').map(s => s.trim()).filter(Boolean);
+        ice.push({ urls, username: env.TURN_USER, credential: env.TURN_PASS });
       }
       // 2) Cloudflare-TURN (kostenpflichtig) — nur wenn konfiguriert.
       if (env.CF_TURN_KEY_ID && env.CF_TURN_API_TOKEN) {
