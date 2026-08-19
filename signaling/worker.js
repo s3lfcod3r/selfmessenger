@@ -20,6 +20,22 @@ export default {
       await stub.fetch('https://mbx/enqueue', { method: 'POST', body: JSON.stringify({ blob: body.blob, push: body.push === undefined ? true : body.push }) });
       return new Response('ok');
     }
+    // ICE-Server (STUN + kurzlebige Cloudflare-TURN-Zugangsdaten). Ohne Secrets: nur STUN.
+    if (url.pathname === '/turn') {
+      const cors = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' };
+      const stun = { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] };
+      if (!env.CF_TURN_KEY_ID || !env.CF_TURN_API_TOKEN) return new Response(JSON.stringify({ iceServers: [stun] }), { headers: cors });
+      try {
+        const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${env.CF_TURN_KEY_ID}/credentials/generate`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${env.CF_TURN_API_TOKEN}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ttl: 86400 })
+        });
+        const j = await r.json();
+        const ice = j && j.iceServers ? [stun, j.iceServers] : [stun];
+        return new Response(JSON.stringify({ iceServers: ice }), { headers: cors });
+      } catch (_) { return new Response(JSON.stringify({ iceServers: [stun] }), { headers: cors }); }
+    }
     return new Response('SelfMessenger signaling: ok', { status: 200 });
   }
 };

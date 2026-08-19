@@ -73,7 +73,7 @@ class Connection(
         when (m.optString("type")) {
             "ready" -> {
                 val initiator = m.getBoolean("initiator")
-                val client = WebRtcClient(ctx, egl, polite = !initiator,
+                val client = WebRtcClient(ctx, egl, polite = !initiator, signalingBaseUrl = signalingBaseUrl,
                     onLocalDesc = { desc -> signaling?.send(JSONObject().put("type", "desc").put("desc", desc)) },
                     onIce = { ice -> signaling?.send(JSONObject().put("type", "ice").put("cand", ice)) },
                     onOpen = { onOpen() },

@@ -502,7 +502,7 @@ function connect(room){
   };
 }
 async function setupPC(initiator){
-  pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+  pc=new RTCPeerConnection({iceServers: await getIceServers()});
   pc.onicecandidate=e=>{ if(e.candidate) wsSend({type:'ice',cand:e.candidate}); };
   pc.onnegotiationneeded=async()=>{ try{ makingOffer=true; await pc.setLocalDescription();
     wsSend({type:'desc',desc:pc.localDescription}); }catch(err){ console.error('nn',err); }finally{ makingOffer=false; } };
@@ -711,6 +711,13 @@ async function onIncomingMedia(rec){
 }
 // ===== Status-Haken (✓ gesendet / ✓✓ zugestellt / ✓✓ blau gelesen) + zuverlässiger Offline-Versand =====
 const SEND_BASE = SIG_BASE.replace(/^ws/,'http').replace(/\/ws(\?.*)?$/,'/send');
+const TURN_URL = SIG_BASE.replace(/^ws/,'http').replace(/\/ws(\?.*)?$/,'/turn');
+// ICE-Server (STUN + evtl. TURN) vom Kuppler holen — TURN ist nötig, wenn direktes P2P hinter NAT scheitert
+let __iceCache=null;
+async function getIceServers(){ if(__iceCache) return __iceCache;
+  try{ const r=await fetch(TURN_URL); const j=await r.json(); __iceCache=(j&&j.iceServers)||[{urls:['stun:stun.l.google.com:19302']}]; }
+  catch(_){ __iceCache=[{urls:['stun:stun.l.google.com:19302']}]; }
+  return __iceCache; }
 function newId(){ return (crypto.randomUUID&&crypto.randomUUID())||(String(Date.now())+Math.random()); }
 const sentMsgs=new Map();            // id -> {bubble, pub}
 const pendingReadAcks=new Map();     // pub -> Set(id): empfangen, aber noch nicht als gelesen bestätigt

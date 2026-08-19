@@ -30,6 +30,7 @@ class WebRtcClient(
     appContext: Context,
     private val eglBase: EglBase,
     private val polite: Boolean,
+    private val signalingBaseUrl: String,
     private val onLocalDesc: (JSONObject) -> Unit,
     private val onIce: (JSONObject) -> Unit,
     private val onOpen: () -> Unit,
@@ -64,9 +65,7 @@ class WebRtcClient(
     }
 
     fun start(initiator: Boolean) {
-        val ice = listOf(
-            PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer()
-        )
+        val ice = TurnConfig.fetch(signalingBaseUrl)   // STUN + evtl. Cloudflare-TURN vom Kuppler
         val config = PeerConnection.RTCConfiguration(ice).apply {
             sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
         }
