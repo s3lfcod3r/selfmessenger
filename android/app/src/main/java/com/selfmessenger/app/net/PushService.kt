@@ -9,6 +9,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import com.selfmessenger.app.MainActivity
 
 /**
  * Empfängt FCM-Push, wenn die App geschlossen/im Hintergrund ist, und zeigt eine
@@ -34,20 +35,28 @@ class PushService : FirebaseMessagingService() {
                 nm.createNotificationChannel(NotificationChannel(CHANNEL, "Nachrichten", NotificationManager.IMPORTANCE_HIGH))
                 nm.createNotificationChannel(NotificationChannel(CHANNEL_CALL, "Anrufe", NotificationManager.IMPORTANCE_HIGH))
             }
-            // Tippen öffnet die App (und schließt die Benachrichtigung dank setAutoCancel)
-            val launch = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            } ?: Intent()
+            // Anruf: expliziter Intent auf MainActivity (Vollbild über Sperrbildschirm). Sonst: App-Start-Intent.
+            val launch = if (isCall) {
+                Intent(ctx, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    putExtra(MainActivity.EXTRA_INCOMING_CALL, true)
+                }
+            } else {
+                ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                } ?: Intent()
+            }
             val piFlags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
             val pi = PendingIntent.getActivity(ctx, if (isCall) 1 else 0, launch, piFlags)
-            val n = NotificationCompat.Builder(ctx, channel)
+            val builder = NotificationCompat.Builder(ctx, channel)
                 .setSmallIcon(if (isCall) android.R.drawable.sym_action_call else android.R.drawable.stat_notify_chat)
                 .setContentTitle(if (isCall) "Eingehender Anruf" else title)
                 .setContentText(if (isCall) "$body — tippen zum Annehmen" else body)
                 .setContentIntent(pi)
                 .setCategory(if (isCall) NotificationCompat.CATEGORY_CALL else NotificationCompat.CATEGORY_MESSAGE)
-                .setAutoCancel(true).setPriority(NotificationCompat.PRIORITY_HIGH).build()
-            nm.notify(System.currentTimeMillis().toInt(), n)
+                .setAutoCancel(true).setPriority(NotificationCompat.PRIORITY_HIGH)
+            if (isCall) builder.setFullScreenIntent(pi, true)   // Vollbild-Klingelschirm über dem Sperrbildschirm
+            nm.notify(System.currentTimeMillis().toInt(), builder.build())
         }
     }
 }

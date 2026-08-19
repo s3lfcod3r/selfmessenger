@@ -110,8 +110,9 @@ private fun initialOf(n: String?): String = ((n ?: "?").trim().firstOrNull() ?: 
 private fun nowTime(): String = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
 
 @Composable
-fun AppRoot(onUnlock: (() -> Unit) -> Unit, onPrepareVpn: ((Boolean) -> Unit) -> Unit) {
-    var unlocked by remember { mutableStateOf(false) }
+fun AppRoot(onUnlock: (() -> Unit) -> Unit, onPrepareVpn: ((Boolean) -> Unit) -> Unit, startUnlocked: Boolean = false) {
+    // Bei eingehendem Anruf (über Sperrbildschirm geweckt) direkt in den Anruf — ohne App-Sperre.
+    var unlocked by remember { mutableStateOf(startUnlocked) }
     MaterialTheme(colorScheme = SelfColors) {
         Surface(Modifier.fillMaxSize(), color = SelfBg) {
             if (!unlocked) LockScreen { onUnlock { unlocked = true } } else MainNav(onPrepareVpn)

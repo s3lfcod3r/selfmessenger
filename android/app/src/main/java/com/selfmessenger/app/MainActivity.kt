@@ -1,11 +1,14 @@
 package com.selfmessenger.app
 
+import android.app.KeyguardManager
+import android.content.Context
 import android.net.VpnService
 import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.nfc.tech.IsoDep
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,7 +38,26 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         nfcAdapter = NfcAdapter.getDefaultAdapter(this)
-        setContent { AppRoot(onUnlock = { onOk -> promptUnlock(onOk) }, onPrepareVpn = { cb -> prepareVpn(cb) }) }
+        // Eingehender Anruf (per Vollbild-Push geweckt): über Sperrbildschirm zeigen + direkt in den Anruf (ohne App-Sperre)
+        val incomingCall = intent?.getBooleanExtra(EXTRA_INCOMING_CALL, false) == true
+        if (incomingCall) setupForIncomingCall()
+        setContent { AppRoot(onUnlock = { onOk -> promptUnlock(onOk) }, onPrepareVpn = { cb -> prepareVpn(cb) }, startUnlocked = incomingCall) }
+    }
+
+    private fun setupForIncomingCall() {
+        if (Build.VERSION.SDK_INT >= 27) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+            (getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager)?.requestDismissKeyguard(this, null)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                    WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+            )
+        }
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
     override fun onResume() {
@@ -84,4 +106,6 @@ class MainActivity : FragmentActivity() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) = onOk()
             }).authenticate(info)
     }
+
+    companion object { const val EXTRA_INCOMING_CALL = "incoming_call" }
 }

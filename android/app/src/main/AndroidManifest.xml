@@ -12,6 +12,8 @@
     <uses-feature android:name="android.hardware.nfc.hce" android:required="false" />
     <!-- Push-Benachrichtigung (Android 13+) für geschlossene App -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Vollbild-Klingelschirm über dem Sperrbildschirm -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <application
         android:allowBackup="false"
