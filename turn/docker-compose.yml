@@ -1,0 +1,11 @@
+# SelfMessenger TURN-Relay (coturn) für Unraid / Docker.
+# Host-Netzwerk, weil TURN einen weiten UDP-Relay-Portbereich braucht (kein Einzel-Port-Mapping).
+services:
+  coturn:
+    image: coturn/coturn:latest
+    container_name: selfmessenger-turn
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+    command: ["-c", "/etc/coturn/turnserver.conf"]

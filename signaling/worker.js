@@ -22,21 +22,36 @@ export default {
       const r = await stub.fetch('https://mbx/enqueue', { method: 'POST', body: JSON.stringify({ blob: body.blob, push: body.push === undefined ? true : body.push }) });
       return new Response(r.ok ? 'ok' : 'rejected', { status: r.status, headers: CORS });
     }
-    // ICE-Server (STUN + kurzlebige Cloudflare-TURN-Zugangsdaten). Ohne Secrets: nur STUN.
+    // ICE-Server: STUN immer; optional selbstgehostetes coturn (TURN_URL+TURN_SECRET) und/oder Cloudflare-TURN.
+    // Ohne beide Secret-Paare: nur STUN → kein Regress. Clients holen /turn dynamisch (kein App/Web-Update nötig).
     if (url.pathname === '/turn') {
       const cors = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' };
-      const stun = { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] };
-      if (!env.CF_TURN_KEY_ID || !env.CF_TURN_API_TOKEN) return new Response(JSON.stringify({ iceServers: [stun] }), { headers: cors });
-      try {
-        const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${env.CF_TURN_KEY_ID}/credentials/generate`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${env.CF_TURN_API_TOKEN}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ttl: 86400 })
-        });
-        const j = await r.json();
-        const ice = j && j.iceServers ? [stun, j.iceServers] : [stun];
-        return new Response(JSON.stringify({ iceServers: ice }), { headers: cors });
-      } catch (_) { return new Response(JSON.stringify({ iceServers: [stun] }), { headers: cors }); }
+      const ice = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+      // 1) Selbstgehostetes coturn (kostenlos) — Standard-REST-Format „use-auth-secret":
+      //    username = Ablauf-Unixzeit, credential = base64(HMAC-SHA1(secret, username)). TURN_URL kommagetrennt.
+      if (env.TURN_URL && env.TURN_SECRET) {
+        try {
+          const username = String(Math.floor(Date.now() / 1000) + 86400);
+          const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.TURN_SECRET), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+          const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(username));
+          const credential = btoa(String.fromCharCode(...new Uint8Array(sig)));
+          const urls = env.TURN_URL.split(',').map(s => s.trim()).filter(Boolean);
+          ice.push({ urls, username, credential });
+        } catch (_) {}
+      }
+      // 2) Cloudflare-TURN (kostenpflichtig) — nur wenn konfiguriert.
+      if (env.CF_TURN_KEY_ID && env.CF_TURN_API_TOKEN) {
+        try {
+          const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${env.CF_TURN_KEY_ID}/credentials/generate`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${env.CF_TURN_API_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ttl: 86400 })
+          });
+          const j = await r.json();
+          if (j && j.iceServers) ice.push(j.iceServers);
+        } catch (_) {}
+      }
+      return new Response(JSON.stringify({ iceServers: ice }), { headers: cors });
     }
     return new Response('SelfMessenger signaling: ok', { status: 200 });
   }
