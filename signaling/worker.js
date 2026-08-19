@@ -5,6 +5,8 @@
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
+    const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' };
+    if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });   // Preflight
     if (url.pathname === '/ws') {
       const mbx = url.searchParams.get('mbx');
       if (mbx) return env.MAILBOX.get(env.MAILBOX.idFromName(mbx)).fetch(req);
@@ -14,11 +16,11 @@ export default {
     // Direkter Briefkasten-Einwurf: verschlüsselten Blob in den Briefkasten legen, ganz ohne P2P/Room.
     if (url.pathname === '/send' && req.method === 'POST') {
       let body = null; try { body = await req.json(); } catch (_) {}
-      if (!body || !body.mailbox || !body.blob) return new Response('bad request', { status: 400 });
+      if (!body || !body.mailbox || !body.blob) return new Response('bad request', { status: 400, headers: CORS });
       const stub = env.MAILBOX.get(env.MAILBOX.idFromName(body.mailbox));
       // push: true (Standard) | false (Chunks) | "call" (Anruf-Benachrichtigung). Wert durchreichen.
-      await stub.fetch('https://mbx/enqueue', { method: 'POST', body: JSON.stringify({ blob: body.blob, push: body.push === undefined ? true : body.push }) });
-      return new Response('ok');
+      const r = await stub.fetch('https://mbx/enqueue', { method: 'POST', body: JSON.stringify({ blob: body.blob, push: body.push === undefined ? true : body.push }) });
+      return new Response(r.ok ? 'ok' : 'rejected', { status: r.status, headers: CORS });
     }
     // ICE-Server (STUN + kurzlebige Cloudflare-TURN-Zugangsdaten). Ohne Secrets: nur STUN.
     if (url.pathname === '/turn') {
@@ -59,11 +61,11 @@ export class Room {
       this.sessions[0].send(JSON.stringify({ type: 'ready', initiator: false }));
       this.sessions[1].send(JSON.stringify({ type: 'ready', initiator: true }));
     }
-    ws.addEventListener('message', (evt) => {
+    ws.addEventListener('message', async (evt) => {
       let parsed = null; try { parsed = JSON.parse(evt.data); } catch (_) {}
       if (parsed && parsed.type === 'store') {           // verschlüsselten Blob in den Briefkasten legen (Alt-Pfad)
         const stub = this.env.MAILBOX.get(this.env.MAILBOX.idFromName(parsed.mailbox));
-        stub.fetch('https://mbx/enqueue', { method: 'POST', body: JSON.stringify({ blob: parsed.blob, push: true }) });
+        try { await stub.fetch('https://mbx/enqueue', { method: 'POST', body: JSON.stringify({ blob: parsed.blob, push: true }) }); } catch (_) {}
         return;
       }
       for (const peer of this.sessions) if (peer !== ws) { try { peer.send(evt.data); } catch (_) {} }
@@ -88,12 +90,26 @@ export class Mailbox {
       const blob = body && body.blob ? body.blob : body;     // {blob,push} oder (alt) roher Blob
       const pushVal = body ? body.push : true;
       const doPush = pushVal !== false;
+      if (JSON.stringify(blob).length > 120000) return new Response('too large', { status: 413 });   // DO-Wert-Limit 128KB
       if (this.ws) { try { this.ws.send(JSON.stringify({ type: 'mail', items: [blob] })); return new Response('sent'); } catch (_) {} }
+      // Queue-Cap gegen unbegrenztes Speicherwachstum (Storage-DoS)
+      let qcount = (await this.state.storage.get('qcount')) || 0;
+      if (qcount >= 3000) return new Response('mailbox full', { status: 429 });
       // Offline: jeden Eintrag als eigenen Key ablegen (umgeht das 128-KB-pro-Wert-Limit; große Bilder ok)
       const seq = ((await this.state.storage.get('seq')) || 0) + 1;
       await this.state.storage.put('seq', seq);
       await this.state.storage.put('q:' + String(seq).padStart(9, '0'), blob);
-      if (doPush) { const token = await this.state.storage.get('token'); if (token) { try { await sendPush(this.env, token, pushVal === 'call'); } catch (_) {} } }
+      await this.state.storage.put('qcount', qcount + 1);
+      if (doPush) {
+        // Push-Rate-Limit gegen Benachrichtigungs-Bombing (v.a. gefälschte "Anruf"-Pushes)
+        const now = Date.now();
+        let pt = ((await this.state.storage.get('pushTimes')) || []).filter((t) => now - t < 60000);
+        if (pt.length < 12) {
+          pt.push(now); await this.state.storage.put('pushTimes', pt);
+          const token = await this.state.storage.get('token');
+          if (token) { try { await sendPush(this.env, token, pushVal === 'call'); } catch (_) {} }
+        }
+      }
       return new Response('queued');
     }
     if (req.headers.get('Upgrade') !== 'websocket') return new Response('expected websocket', { status: 426 });
@@ -105,6 +121,7 @@ export class Mailbox {
       for (let i = 0; i < items.length; i += 20)             // in Häppchen senden (WS-Frame-Limit ~1 MB)
         server.send(JSON.stringify({ type: 'mail', items: items.slice(i, i + 20) }));
       await this.state.storage.delete([...entries.keys()]);
+      await this.state.storage.put('qcount', 0);
     }
     server.addEventListener('message', async (evt) => {                 // Push-Token anmelden
       let m = null; try { m = JSON.parse(evt.data); } catch (_) {}
@@ -159,7 +176,8 @@ async function fcmAccessToken(sa) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`
   });
-  const j = await res.json();
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || !j.access_token) throw new Error('fcm oauth failed');   // NICHT cachen — sonst 1 h lang kein Push
   _fcmToken = { access_token: j.access_token, exp: now + 3500 };
   return j.access_token;
 }

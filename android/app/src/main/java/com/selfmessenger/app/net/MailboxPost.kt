@@ -18,19 +18,19 @@ object MailboxPost {
     private fun sendUrl(baseUrl: String): String =
         baseUrl.replaceFirst(Regex("^ws"), "http").replace(Regex("/ws(\\?.*)?$"), "/send")
 
-    // push: true (Standard) | false (Chunks/Acks) | "call" (Anruf-Benachrichtigung)
-    fun post(baseUrl: String, mailbox: String, iv: String, ct: String, push: Any = true) {
+    // push: true (Standard) | false (Chunks/Acks) | "call" (Anruf-Benachrichtigung). Gibt true bei Erfolg zurück.
+    fun post(baseUrl: String, mailbox: String, iv: String, ct: String, push: Any = true): Boolean {
         val body = JSONObject().put("mailbox", mailbox)
             .put("blob", JSONObject().put("iv", iv).put("ct", ct)).put("push", push).toString()
         val req = Request.Builder().url(sendUrl(baseUrl)).post(body.toRequestBody(JSON)).build()
-        try { http.newCall(req).execute().use {} } catch (_: Exception) {}
+        return try { http.newCall(req).execute().use { it.isSuccessful } } catch (_: Exception) { false }
     }
 
-    /** Verschlüsselten Umschlag (Nachricht/Medium/Ack/Anruf) in den Briefkasten von [pub] legen. */
-    fun postEnvelope(me: Me, baseUrl: String, pub: String, obj: JSONObject, push: Any = true) {
+    /** Verschlüsselten Umschlag (Nachricht/Medium/Ack/Anruf) in den Briefkasten von [pub] legen. Gibt true bei Erfolg. */
+    fun postEnvelope(me: Me, baseUrl: String, pub: String, obj: JSONObject, push: Any = true): Boolean {
         val s = CryptoSession.derive(me.privateKey, pub)
         val (iv, ct) = s.encrypt(obj.toString().toByteArray(Charsets.UTF_8))
-        post(baseUrl, CryptoSession.mailboxId(pub), iv, ct, push)
+        return post(baseUrl, CryptoSession.mailboxId(pub), iv, ct, push)
     }
 
     // Ack weckt den Empfänger nicht (push=false)

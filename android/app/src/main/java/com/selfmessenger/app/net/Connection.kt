@@ -7,6 +7,7 @@ import com.selfmessenger.app.Contact
 import com.selfmessenger.app.Me
 import org.json.JSONObject
 import org.webrtc.EglBase
+import org.webrtc.PeerConnection
 import org.webrtc.VideoTrack
 
 /**
@@ -58,7 +59,11 @@ class Connection(
         if (!callActive) ui { onIncomingCall?.invoke(callVideo) } else ui { onCallConnected?.invoke() }
     }
 
+    // ICE-Server (STUN + evtl. TURN) vorab im Hintergrund holen — blockiert NICHT den Signaling-Thread
+    @Volatile private var iceServers: List<PeerConnection.IceServer> = TurnConfig.stunOnly
+
     fun start() {
+        Thread { iceServers = TurnConfig.fetch(signalingBaseUrl) }.start()
         val room = CryptoSession.rendezvous(me.pubB64, contact.pubB64)
         signaling = Signaling(signalingBaseUrl,
             onMessage = { handleSignal(it) },
@@ -73,7 +78,7 @@ class Connection(
         when (m.optString("type")) {
             "ready" -> {
                 val initiator = m.getBoolean("initiator")
-                val client = WebRtcClient(ctx, egl, polite = !initiator, signalingBaseUrl = signalingBaseUrl,
+                val client = WebRtcClient(ctx, egl, polite = !initiator, iceServers = iceServers,
                     onLocalDesc = { desc -> signaling?.send(JSONObject().put("type", "desc").put("desc", desc)) },
                     onIce = { ice -> signaling?.send(JSONObject().put("type", "ice").put("cand", ice)) },
                     onOpen = { onOpen() },
@@ -109,9 +114,9 @@ class Connection(
         } else if (com.selfmessenger.app.Settings.offlineMailboxFor(ctx, contact.pubB64)) {   // offline: direkt in den Briefkasten
             ui { onMessage(true, text, id) }
             Thread {
-                MailboxPost.postEnvelope(me, signalingBaseUrl, contact.pubB64,
+                val ok = MailboxPost.postEnvelope(me, signalingBaseUrl, contact.pubB64,
                     JSONObject().put("t", "m").put("id", id).put("body", text))
-                ui { onSentStatus?.invoke(id, "sent") }
+                ui { onSentStatus?.invoke(id, if (ok) "sent" else "fail") }
             }.start()
         } else {                                          // Zwischenlagern aus -> nicht zustellbar
             ui { onMessage(true, text, id); onSentStatus?.invoke(id, "fail") }
@@ -139,17 +144,17 @@ class Connection(
             ui { onMedia?.invoke(true, kind, name, mime, bytes, id) }
             Thread {
                 val total = maxOf(1, (bytes.size + OFF_CHUNK - 1) / OFF_CHUNK)
-                MailboxPost.postEnvelope(me, signalingBaseUrl, contact.pubB64,   // Meta weckt per Push
+                var ok = MailboxPost.postEnvelope(me, signalingBaseUrl, contact.pubB64,   // Meta weckt per Push
                     JSONObject().put("t", "mm").put("id", id).put("kind", kind).put("name", name).put("mime", mime).put("total", total))
                 var i = 0
                 while (i < total) {
                     val slice = bytes.copyOfRange(i * OFF_CHUNK, minOf((i + 1) * OFF_CHUNK, bytes.size))
                     val b64 = android.util.Base64.encodeToString(slice, android.util.Base64.NO_WRAP)
-                    MailboxPost.postEnvelope(me, signalingBaseUrl, contact.pubB64,
-                        JSONObject().put("t", "mc").put("id", id).put("i", i).put("body", b64), push = false)
+                    if (!MailboxPost.postEnvelope(me, signalingBaseUrl, contact.pubB64,
+                            JSONObject().put("t", "mc").put("id", id).put("i", i).put("body", b64), push = false)) ok = false
                     i++
                 }
-                ui { onSentStatus?.invoke(id, "sent") }
+                ui { onSentStatus?.invoke(id, if (ok) "sent" else "fail") }   // nur „gesendet", wenn Meta + alle Häppchen ankamen
             }.start()
         } else {                                           // Zwischenlagern aus
             ui { onMedia?.invoke(true, kind, name, mime, bytes, id); onSentStatus?.invoke(id, "fail") }

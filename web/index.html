@@ -2,6 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' https: wss: stun: turn: turns:; font-src 'self'; object-src 'none'; base-uri 'self'" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>SelfMessenger</title>
 <link rel="icon" href="brand/shield.png" />
@@ -341,6 +342,8 @@ const hex=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(
 const utf8b64=s=>btoa(unescape(encodeURIComponent(s)));
 const b64utf8=s=>decodeURIComponent(escape(atob(s)));
 const $=id=>document.getElementById(id);
+// HTML-escapen — Pflicht für alles, was vom Gegenüber kommt (Dateinamen, Namen) und in innerHTML landet
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const setStatus=(t,c='')=>{$('status').textContent=t;$('status').className='status '+c;};
 async function sha(bytes){return hex(await crypto.subtle.digest('SHA-256',bytes));}
 const PROFILE=new URL(location).searchParams.get('me')||'default';
@@ -392,11 +395,11 @@ function setOverride(base,pub,val){ const k=base+':'+pub; if(val===null) localSt
 // ===== Verlauf-Speicher (localStorage, pro Kontakt; Medien nur als Label) =====
 function storeKey(pub){ return 'sm_msgs_'+PROFILE+'_'+pub; }
 function loadHistory(pub){ try{ return JSON.parse(localStorage.getItem(storeKey(pub))||'[]'); }catch(_){ return []; } }
-function appendHistory(pub,rec){ const l=loadHistory(pub); l.push(rec); while(l.length>2000) l.shift(); localStorage.setItem(storeKey(pub),JSON.stringify(l)); }
+function appendHistory(pub,rec){ const l=loadHistory(pub); l.push(rec); while(l.length>2000) l.shift(); try{ localStorage.setItem(storeKey(pub),JSON.stringify(l)); }catch(e){ console.warn('history voll',e); } }
 function clearHistory(pub){ localStorage.removeItem(storeKey(pub)); }
 function recordMsg(pub,fromMe,text,label,id,st){ if(pub && saveHistFor(pub)) appendHistory(pub,{m:fromMe,t:text||null,l:label||null,ts:nowTime(),id:id||null,st:st||null}); }
 function updateHistoryStatus(pub,id,s){ if(!pub||!id||!saveHistFor(pub)) return; const l=loadHistory(pub); let ch=false;
-  for(const r of l){ if(r.id===id){ r.st=s; ch=true; } } if(ch) localStorage.setItem(storeKey(pub),JSON.stringify(l)); }
+  for(const r of l){ if(r.id===id){ r.st=s; ch=true; } } if(ch) try{ localStorage.setItem(storeKey(pub),JSON.stringify(l)); }catch(e){ console.warn('history voll',e); } }
 function mediaLabelOf(meta){ return ({image:'🖼 Bild',voice:'🎤 Sprachnachricht',file:'📎 '+(meta.name||'Datei')})[meta.kind]||'📎 Datei'; }
 
 // ===== Medien lokal speichern (IndexedDB) — damit Bilder auch nach Reload bleiben =====
@@ -434,9 +437,9 @@ async function renderContacts(){
   if(!cs.length){ el.innerHTML='<div class="empty">Noch keine Chats.<br />Tippe <b>＋</b> und tauscht eure Codes persönlich.</div>'; return; }
   el.innerHTML='';
   for(const c of cs){
-    const nm=(c.n||'?').replace(/</g,'&lt;');
-    const row=document.createElement('div'); row.className='chat-row'; row.title='Mit '+nm+' verbinden';
-    row.innerHTML='<div class="avatar">'+initialOf(c.n)+'</div>'+
+    const nm=esc(c.n||'?');
+    const row=document.createElement('div'); row.className='chat-row'; row.title='Mit '+(c.n||'?')+' verbinden';
+    row.innerHTML='<div class="avatar">'+esc(initialOf(c.n))+'</div>'+
       '<div class="info"><div class="nm">'+nm+'</div><div class="sub">🔒 Ende-zu-Ende verschlüsselt</div></div>';
     row.onclick=()=>connectToContact(c); el.appendChild(row); }
 }
@@ -467,7 +470,18 @@ let ws,pc,dc,session=null,currentContact=null,polite=false,makingOffer=false,ign
 let iAmInitiator=false, selfAcct=null, ratchet=null, ratchetReady=false, olmReady=false;
 window.__rendezvous=null;
 function wsSend(o){ws.send(JSON.stringify(o));}
+// Alte Verbindung sauber abbauen — sonst bleibt ein toter Socket im Kuppler-Raum hängen ("warte auf …" für immer)
+function teardownConn(){
+  try{ if(typeof mediaRec!=='undefined' && mediaRec && mediaRec.state==='recording') mediaRec.stop(); }catch(_){}
+  try{ hangup(false); }catch(_){}                    // ggf. laufenden Anruf beenden (ohne bye)
+  try{ dc && dc.close(); }catch(_){} dc=null;
+  try{ pc && pc.close(); }catch(_){} pc=null;
+  try{ ws && ws.close(); }catch(_){} ws=null;
+  try{ if(ratchet && ratchet.free) ratchet.free(); }catch(_){} ratchet=null;
+  session=null; ratchetReady=false; window.ratchetReady=false; makingOffer=false; ignoreOffer=false;
+}
 async function connectToContact(c){
+  teardownConn();                                    // vorherige Verbindung schließen, bevor die neue aufgebaut wird
   currentContact=c; session=null; ratchetReady=false; window.ratchetReady=false; ratchet=null; window.__remoteKinds=[];
   const room=await rendezvous(identity.pubB64,c.k); window.__rendezvous=room;
   $('peerName').textContent=c.n; $('peerAvatar').textContent=initialOf(c.n);
@@ -622,6 +636,7 @@ window.__startSyntheticCall=(video)=>{ const tracks=[]; const AC=window.AudioCon
 // ===== Nachrichten + Medien =====
 const incoming=new Map(); window.__lastRecv=null; window.__lastSent=null;
 async function handleDC(m){
+ try{
   if(m.t==='hs'){ try{ await handleHandshake(await aesUnwrap(m)); }catch(err){ console.error('hs',err); } }
   else if(m.t==='bye'){ hangup(false); }                 // Gegenseite hat aufgelegt
   else if(m.t==='ack'){ updateSentStatus(m.id, m.s==='r'?'read':'delivered'); }   // Haken-Update
@@ -631,6 +646,7 @@ async function handleDC(m){
     if(rec.bubble) rec.bubble.querySelector('i').style.width=Math.round(rec.got/rec.meta.total*100)+'%';
     if(rec.got===rec.meta.total){ const buf=await assemble(rec); recordMedia(currentContact&&currentContact.k,false,rec.meta.id,rec.meta.kind,rec.meta.name,rec.meta.mime,buf); incoming.delete(m.id);
       const pub=currentContact&&currentContact.k; await sendAck(pub,rec.meta.id,'d'); if(chatOpenWith(pub)) await sendAck(pub,rec.meta.id,'r'); } }
+ }catch(err){ console.error('handleDC',m&&m.t,err); }   // eine kaputte Nachricht darf den Chat nicht abschießen
 }
 async function assemble(rec){ const total=rec.parts.reduce((n,p)=>n+p.length,0), buf=new Uint8Array(total); let o=0;
   for(const p of rec.parts){ buf.set(p,o); o+=p.length; } window.__lastRecv={hash:await sha(buf),size:buf.length,name:rec.meta.name};
@@ -652,10 +668,11 @@ async function sendBytes(bytes,kind,name,mime){ const id=(crypto.randomUUID&&cry
     setBubbleStatus(bubble,'sent');
   } else if(pub && offlineMbxFor(pub)){             // offline: zerstückelt in den Briefkasten (60 KB/Stück)
     const OFF=60*1024, total=Math.max(1,Math.ceil(bytes.length/OFF));
-    const okMeta=await postOffline(pub,{t:'mm',id,kind,name:name||'',mime:meta.mime,total},true);
-    for(let i=0;i<total;i++){ await postOffline(pub,{t:'mc',id,i,body:b64(bytes.subarray(i*OFF,(i+1)*OFF))},false);
+    let allOk=await postOffline(pub,{t:'mm',id,kind,name:name||'',mime:meta.mime,total},true);
+    for(let i=0;i<total;i++){ const ok=await postOffline(pub,{t:'mc',id,i,body:b64(bytes.subarray(i*OFF,(i+1)*OFF))},false); if(!ok) allOk=false;
       if(bubble) bubble.querySelector('i').style.width=Math.round((i+1)/total*100)+'%'; }
-    setBubbleStatus(bubble, okMeta?'sent':'pending');
+    setBubbleStatus(bubble, allOk?'sent':'pending');   // nur „gesendet", wenn wirklich ALLE Häppchen durch sind
+    updateHistoryStatus(pub,id,allOk?'sent':'pending');
   } else if(pub){ const tk=bubble.querySelector('.tick'); if(tk) tk.textContent='⚠'; }
   window.__lastSent={hash:await sha(bytes),size:bytes.length,name};
   renderMedia(bubble,meta,new Blob([bytes],{type:meta.mime})); return window.__lastSent.hash; }
@@ -667,23 +684,28 @@ function addTextBubble(who,text,meta,time,id,status){ const d=document.createEle
   $('log').appendChild(d); $('log').scrollTop=$('log').scrollHeight; return d; }
 function addSys(text){ const d=document.createElement('div'); d.className='msg sys'; d.textContent=text; $('log').appendChild(d); $('log').scrollTop=$('log').scrollHeight; }
 function addMediaBubble(who,meta,wp){ const d=document.createElement('div'); d.className='msg '+who; d.dataset.kind=meta.kind;
-  const label={image:'🖼 Bild',voice:'🎤 Sprachnachricht',file:'📎 '+(meta.name||'Datei')}[meta.kind]||'Datei';
+  const label={image:'🖼 Bild',voice:'🎤 Sprachnachricht',file:'📎 '+esc(meta.name||'Datei')}[meta.kind]||'Datei';
   d.innerHTML='<div class="body">'+label+'</div>'+(wp?'<div class="prog"><i></i></div>':'')+'<span class="m">'+(who==='self'?'senden…':'empfangen…')+' · verschlüsselt</span>';
   $('log').appendChild(d); $('log').scrollTop=$('log').scrollHeight; return d; }
 function renderMedia(bubble,meta,blob){ if(!bubble) return; const url=URL.createObjectURL(blob);
   const body=bubble.querySelector('.body'), prog=bubble.querySelector('.prog'); if(prog) prog.remove();
-  if(meta.kind==='image') body.innerHTML='<img src="'+url+'" alt="Bild"><a class="dl" download="'+((meta.name||'bild.jpg')+'').replace(/"/g,'')+'" href="'+url+'">⬇ Speichern</a>';
+  if(meta.kind==='image') body.innerHTML='<img src="'+url+'" alt="Bild"><a class="dl" download="'+esc(meta.name||'bild.jpg')+'" href="'+url+'">⬇ Speichern</a>';
   else if(meta.kind==='voice') body.innerHTML='<audio controls src="'+url+'"></audio>';
-  else body.innerHTML='<a class="file" download="'+(meta.name||'datei.bin')+'" href="'+url+'">⬇ '+(meta.name||'Datei')+'</a>';
+  else body.innerHTML='<a class="file" download="'+esc(meta.name||'datei.bin')+'" href="'+url+'">⬇ '+esc(meta.name||'Datei')+'</a>';
   bubble.querySelector('.m').textContent='verschlüsselt ✓'; }
 // ===== Offline-Zustellung (Briefkasten) =====
 let mbxWs=null;
+let mbxRetry=0;
 async function openMailbox(){
   const mine=await mailboxId(identity.pubB64);
-  mbxWs=new WebSocket(`${SIG_BASE}?mbx=${mine}`);
-  mbxWs.onmessage=async e=>{ const m=JSON.parse(e.data);
-    if(m.type==='mail'){ for(const blob of m.items) await receiveOffline(blob); } };
+  try{ mbxWs=new WebSocket(`${SIG_BASE}?mbx=${mine}`); }catch(_){ scheduleMbxReconnect(); return; }
+  mbxWs.onopen=()=>{ mbxRetry=0; };
+  mbxWs.onmessage=async e=>{ try{ const m=JSON.parse(e.data);
+    if(m.type==='mail'){ for(const blob of m.items) await receiveOffline(blob); } }catch(err){ console.error('mbx',err); } };
+  mbxWs.onclose=()=>scheduleMbxReconnect();     // Briefkasten fällt sonst nach Idle/Sleep still aus
+  mbxWs.onerror=()=>{ try{ mbxWs.close(); }catch(_){} };
 }
+function scheduleMbxReconnect(){ mbxRetry=Math.min(mbxRetry+1,6); setTimeout(()=>{ openMailbox().catch(()=>{}); }, 1000*Math.pow(2,mbxRetry-1)); }
 const offlineMedia={};
 async function receiveOffline(blob){
   for(const c of loadContacts()){                       // Probe-Entschlüsselung: nur der echte Absender passt
@@ -809,8 +831,7 @@ $('shareCode').onclick=async()=>{
   copyMyCode('shareCode','📤 Teilen');
 };
 $('addBtn').onclick=()=>{ if(addContactFromCode($('addCode').value)){ $('addCode').value=''; renderContacts(); showScreen('screenChats'); } };
-$('back').onclick=()=>{ try{ pc&&pc.close(); ws&&ws.close(); }catch(_){} session=null; ratchetReady=false;
-  showScreen('screenChats'); renderContacts(); };
+$('back').onclick=()=>{ teardownConn(); currentContact=null; showScreen('screenChats'); renderContacts(); };
 $('send').onclick=sendChat; $('in').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat();});
 $('attach').onclick=()=>$('file').click();
 $('file').onchange=e=>{ const f=e.target.files[0]; if(!f) return; sendFileLike(f,f.type.startsWith('image/')?'image':'file'); e.target.value=''; };

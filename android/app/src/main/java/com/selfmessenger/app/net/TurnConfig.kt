@@ -16,7 +16,7 @@ object TurnConfig {
     private fun turnUrl(baseUrl: String): String =
         baseUrl.replaceFirst(Regex("^ws"), "http").replace(Regex("/ws(\\?.*)?$"), "/turn")
 
-    private val stunOnly: List<PeerConnection.IceServer>
+    val stunOnly: List<PeerConnection.IceServer>
         get() = listOf(
             PeerConnection.IceServer.builder(listOf("stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"))
                 .createIceServer()

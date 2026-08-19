@@ -30,7 +30,7 @@ class WebRtcClient(
     appContext: Context,
     private val eglBase: EglBase,
     private val polite: Boolean,
-    private val signalingBaseUrl: String,
+    private val iceServers: List<PeerConnection.IceServer>,
     private val onLocalDesc: (JSONObject) -> Unit,
     private val onIce: (JSONObject) -> Unit,
     private val onOpen: () -> Unit,
@@ -49,6 +49,8 @@ class WebRtcClient(
     private var surfaceHelper: SurfaceTextureHelper? = null
     var localVideoTrack: VideoTrack? = null; private set
     private var localAudioTrack: org.webrtc.AudioTrack? = null
+    private var audioSender: org.webrtc.RtpSender? = null
+    private var videoSender: org.webrtc.RtpSender? = null
 
     var onRemoteVideo: ((VideoTrack) -> Unit)? = null
     var onLocalVideo: ((VideoTrack) -> Unit)? = null
@@ -65,8 +67,7 @@ class WebRtcClient(
     }
 
     fun start(initiator: Boolean) {
-        val ice = TurnConfig.fetch(signalingBaseUrl)   // STUN + evtl. Cloudflare-TURN vom Kuppler
-        val config = PeerConnection.RTCConfiguration(ice).apply {
+        val config = PeerConnection.RTCConfiguration(iceServers).apply {   // ICE wird vorab (im Hintergrund) geholt, blockiert nicht mehr das Signaling
             sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
         }
         pc = factory.createPeerConnection(config, pcObserver)
@@ -86,7 +87,7 @@ class WebRtcClient(
         val aSource = factory.createAudioSource(MediaConstraints())
         audioSource = aSource
         val aTrack = factory.createAudioTrack("audio0", aSource); localAudioTrack = aTrack
-        peer.addTrack(aTrack, listOf("stream0"))
+        audioSender = peer.addTrack(aTrack, listOf("stream0"))
         if (video) {
             val enumerator = Camera2Enumerator(appCtx)
             val device = enumerator.deviceNames.firstOrNull { enumerator.isFrontFacing(it) }
@@ -97,7 +98,7 @@ class WebRtcClient(
             cap.initialize(helper, appCtx, vSource.capturerObserver)
             cap.startCapture(1280, 720, 30)
             val vTrack = factory.createVideoTrack("video0", vSource)
-            peer.addTrack(vTrack, listOf("stream0"))
+            videoSender = peer.addTrack(vTrack, listOf("stream0"))
             capturer = cap; videoSource = vSource; surfaceHelper = helper; localVideoTrack = vTrack
             onLocalVideo?.invoke(vTrack)
         }
@@ -108,8 +109,13 @@ class WebRtcClient(
 
     fun hangupCall() {
         try { capturer?.stopCapture() } catch (_: Exception) {}
+        try { audioSender?.let { pc?.removeTrack(it) } } catch (_: Exception) {}   // Sender entfernen, sonst bleiben sie im nächsten Anruf hängen
+        try { videoSender?.let { pc?.removeTrack(it) } } catch (_: Exception) {}
+        audioSender = null; videoSender = null
         capturer?.dispose(); capturer = null
         surfaceHelper?.dispose(); surfaceHelper = null
+        videoSource?.dispose(); videoSource = null                                // native Quellen freigeben (Leck-Fix)
+        audioSource?.dispose(); audioSource = null
         localVideoTrack = null; localAudioTrack = null
     }
 
@@ -136,6 +142,7 @@ class WebRtcClient(
 
     fun close() {
         hangupCall(); dc?.close(); pc?.close(); pc = null
+        try { factory.dispose() } catch (_: Exception) {}   // native PeerConnectionFactory freigeben (sonst Leck pro Chat)
     }
 
     private fun createOfferAndSend() {

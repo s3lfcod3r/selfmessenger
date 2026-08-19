@@ -77,6 +77,7 @@ import com.selfmessenger.app.net.MailboxClient
 import com.selfmessenger.app.vpn.VpnManager
 import com.selfmessenger.app.vpn.VpnStore
 import com.wireguard.android.backend.Tunnel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.webrtc.EglBase
@@ -415,11 +416,13 @@ private fun ChatScreen(me: Me, contact: Contact, onBack: () -> Unit) {
             onStatus = { status = it },
             onMessage = { fromMe, text, id -> val item = ChatItem(fromMe, text = text, id = id, status = if (fromMe) "pending" else null); messages.add(item); persist(item, null) })
     }
+    val bgScope = rememberCoroutineScope()
+    // Datei einlesen + verschlüsselt senden IMMER im Hintergrund (sonst UI-Thread-Blockade → ANR bei größeren Bildern)
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        if (uri != null) readPicked(ctx, uri)?.let { (n, mime, b) -> conn.sendMedia("image", n, mime, b) }
+        if (uri != null) bgScope.launch(Dispatchers.IO) { readPicked(ctx, uri)?.let { (n, mime, b) -> conn.sendMedia("image", n, mime, b) } }
     }
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        if (uri != null) readPicked(ctx, uri)?.let { (n, mime, b) -> conn.sendMedia("file", n, mime, b) }
+        if (uri != null) bgScope.launch(Dispatchers.IO) { readPicked(ctx, uri)?.let { (n, mime, b) -> conn.sendMedia("file", n, mime, b) } }
     }
     val recorder = remember { VoiceRecorder() }
     var recording by remember { mutableStateOf(false) }
@@ -488,7 +491,7 @@ private fun ChatScreen(me: Me, contact: Contact, onBack: () -> Unit) {
         Row(Modifier.fillMaxWidth().background(SelfPanel).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { imagePicker.launch("image/*") }) { Icon(Icons.Filled.AttachFile, "Bild/Datei", tint = SelfMuted) }
             IconButton(onClick = {
-                if (recording) { val b = recorder.stop(); recording = false; if (b != null) conn.sendMedia("voice", "sprachnachricht.m4a", "audio/mp4", b) }
+                if (recording) { val b = recorder.stop(); recording = false; if (b != null) bgScope.launch(Dispatchers.IO) { conn.sendMedia("voice", "sprachnachricht.m4a", "audio/mp4", b) } }
                 else if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startRec()
                 else micPermission.launch(Manifest.permission.RECORD_AUDIO)
             }) { Icon(if (recording) Icons.Filled.Stop else Icons.Filled.Mic, "Sprachnachricht", tint = if (recording) Color(0xFFE5484D) else SelfMuted) }
