@@ -27,13 +27,23 @@ class PushService : FirebaseMessagingService() {
 
     companion object {
         const val CHANNEL = "selfmessenger_messages"
-        const val CHANNEL_CALL = "selfmessenger_calls"
+        const val CHANNEL_CALL = "selfmessenger_calls2"   // v2: mit Klingelton + Vibration
+        private val CALL_VIBRATION = longArrayOf(0, 1000, 800, 1000, 800, 1000)
+
         fun notifyMessage(ctx: Context, title: String, body: String, isCall: Boolean = false) {
             val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             val channel = if (isCall) CHANNEL_CALL else CHANNEL
+            val ringtone = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE)
             if (Build.VERSION.SDK_INT >= 26) {
                 nm.createNotificationChannel(NotificationChannel(CHANNEL, "Nachrichten", NotificationManager.IMPORTANCE_HIGH))
-                nm.createNotificationChannel(NotificationChannel(CHANNEL_CALL, "Anrufe", NotificationManager.IMPORTANCE_HIGH))
+                val callCh = NotificationChannel(CHANNEL_CALL, "Anrufe", NotificationManager.IMPORTANCE_HIGH).apply {
+                    val attrs = android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
+                    setSound(ringtone, attrs)
+                    enableVibration(true); vibrationPattern = CALL_VIBRATION
+                }
+                nm.createNotificationChannel(callCh)
             }
             // Anruf: expliziter Intent auf MainActivity (Vollbild über Sperrbildschirm). Sonst: App-Start-Intent.
             val launch = if (isCall) {
@@ -55,7 +65,10 @@ class PushService : FirebaseMessagingService() {
                 .setContentIntent(pi)
                 .setCategory(if (isCall) NotificationCompat.CATEGORY_CALL else NotificationCompat.CATEGORY_MESSAGE)
                 .setAutoCancel(true).setPriority(NotificationCompat.PRIORITY_HIGH)
-            if (isCall) builder.setFullScreenIntent(pi, true)   // Vollbild-Klingelschirm über dem Sperrbildschirm
+            if (isCall) {
+                builder.setFullScreenIntent(pi, true)           // Vollbild-Klingelschirm über dem Sperrbildschirm
+                if (Build.VERSION.SDK_INT < 26) { builder.setSound(ringtone); builder.setVibrate(CALL_VIBRATION) }
+            }
             nm.notify(System.currentTimeMillis().toInt(), builder.build())
         }
     }
