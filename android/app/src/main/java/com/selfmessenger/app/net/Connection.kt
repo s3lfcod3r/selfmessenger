@@ -42,7 +42,10 @@ class Connection(
     private var callActive = false
     private var callVideo = false
 
-    fun startCall(video: Boolean) { callActive = true; callVideo = video; rtc?.startCall(video) }
+    fun startCall(video: Boolean) {
+        callActive = true; callVideo = video; rtc?.startCall(video)
+        MailboxPost.sendCallInviteAsync(me, signalingBaseUrl, contact.pubB64, video)   // weckt eine geschlossene App per Push
+    }
     fun acceptCall() { callActive = true; rtc?.startCall(callVideo) }   // Mikro/Kamera passend zum eingehenden Anruf
     fun hangupCall() {
         try { rtc?.sendText(JSONObject().put("t", "bye").toString()) } catch (_: Exception) {}  // Gegenseite mit-beenden

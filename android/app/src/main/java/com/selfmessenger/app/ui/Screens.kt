@@ -59,6 +59,7 @@ import com.selfmessenger.app.Contacts
 import com.selfmessenger.app.Identity
 import com.selfmessenger.app.AckBus
 import com.selfmessenger.app.AppState
+import com.selfmessenger.app.IncomingCallBus
 import com.selfmessenger.app.MediaFiles
 import com.selfmessenger.app.Me
 import com.selfmessenger.app.MessageStore
@@ -158,6 +159,13 @@ private fun MainNav(onPrepareVpn: ((Boolean) -> Unit) -> Unit) {
             Toast.makeText(ctx, "📨 $from: $text", Toast.LENGTH_LONG).show()
         }
         mbx.start(); onDispose { mbx.stop() }
+    }
+
+    // Eingehende Anruf-Einladung (per Push geweckt) → passenden Chat automatisch öffnen; der wartende Anruf verbindet dann
+    LaunchedEffect(Unit) {
+        IncomingCallBus.events.collect { call ->
+            Contacts.all(ctx).firstOrNull { it.pubB64 == call.pub }?.let { chatWith = it }
+        }
     }
 
     val target = chatWith

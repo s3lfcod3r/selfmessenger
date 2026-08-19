@@ -8,6 +8,8 @@ import com.selfmessenger.app.AckBus
 import com.selfmessenger.app.AppState
 import com.selfmessenger.app.Contact
 import com.selfmessenger.app.Contacts
+import com.selfmessenger.app.IncomingCall
+import com.selfmessenger.app.IncomingCallBus
 import com.selfmessenger.app.MediaFiles
 import com.selfmessenger.app.Me
 import com.selfmessenger.app.MessageStore
@@ -84,6 +86,11 @@ class MailboxClient(
             "a" -> {                                       // Bestätigung für eine von MIR gesendete Nachricht
                 val id = env.optString("id"); val s = env.optString("s")
                 if (id.isNotEmpty()) AckBus.emit(c.pubB64, id, if (s == "r") "read" else "delivered")
+            }
+            "call" -> {                                    // Anruf-Einladung: nur wenn frisch (< 60 s) → App öffnet den Chat
+                val ts = env.optLong("ts", 0L)
+                if (System.currentTimeMillis() - ts in 0..60_000)
+                    IncomingCallBus.emit(IncomingCall(c.pubB64, c.name, env.optBoolean("video", false)))
             }
             "mm" -> mediaAcc[env.getString("id")] =
                 MediaOff(env.getString("kind"), env.getString("name"), env.getString("mime"), env.getInt("total"))

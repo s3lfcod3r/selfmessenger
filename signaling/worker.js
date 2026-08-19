@@ -16,8 +16,8 @@ export default {
       let body = null; try { body = await req.json(); } catch (_) {}
       if (!body || !body.mailbox || !body.blob) return new Response('bad request', { status: 400 });
       const stub = env.MAILBOX.get(env.MAILBOX.idFromName(body.mailbox));
-      // push!==false: Benachrichtigung auslösen (bei Medien-Chunks push:false, damit nur die Meta weckt)
-      await stub.fetch('https://mbx/enqueue', { method: 'POST', body: JSON.stringify({ blob: body.blob, push: body.push !== false }) });
+      // push: true (Standard) | false (Chunks) | "call" (Anruf-Benachrichtigung). Wert durchreichen.
+      await stub.fetch('https://mbx/enqueue', { method: 'POST', body: JSON.stringify({ blob: body.blob, push: body.push === undefined ? true : body.push }) });
       return new Response('ok');
     }
     return new Response('SelfMessenger signaling: ok', { status: 200 });
@@ -70,13 +70,14 @@ export class Mailbox {
     if (url.pathname === '/enqueue') {
       const body = await req.json();
       const blob = body && body.blob ? body.blob : body;     // {blob,push} oder (alt) roher Blob
-      const doPush = !body || body.push !== false;
+      const pushVal = body ? body.push : true;
+      const doPush = pushVal !== false;
       if (this.ws) { try { this.ws.send(JSON.stringify({ type: 'mail', items: [blob] })); return new Response('sent'); } catch (_) {} }
       // Offline: jeden Eintrag als eigenen Key ablegen (umgeht das 128-KB-pro-Wert-Limit; große Bilder ok)
       const seq = ((await this.state.storage.get('seq')) || 0) + 1;
       await this.state.storage.put('seq', seq);
       await this.state.storage.put('q:' + String(seq).padStart(9, '0'), blob);
-      if (doPush) { const token = await this.state.storage.get('token'); if (token) { try { await sendPush(this.env, token); } catch (_) {} } }
+      if (doPush) { const token = await this.state.storage.get('token'); if (token) { try { await sendPush(this.env, token, pushVal === 'call'); } catch (_) {} } }
       return new Response('queued');
     }
     if (req.headers.get('Upgrade') !== 'websocket') return new Response('expected websocket', { status: 426 });
@@ -101,7 +102,7 @@ export class Mailbox {
 // ===== FCM-Push (HTTP v1) — weckt die geschlossene App, ohne Inhalt zu übertragen =====
 // Braucht das Dienstkonto (Service Account) als Worker-Secret FCM_SA (JSON-String).
 let _fcmToken = null; // { access_token, exp } je Worker-Instanz zwischengespeichert
-async function sendPush(env, token) {
+async function sendPush(env, token, isCall) {
   if (!env.FCM_SA) return;                       // ohne Dienstkonto: still nichts tun
   const sa = typeof env.FCM_SA === 'string' ? JSON.parse(env.FCM_SA) : env.FCM_SA;
   const access = await fcmAccessToken(sa);
@@ -111,7 +112,11 @@ async function sendPush(env, token) {
     body: JSON.stringify({
       message: {
         token,
-        data: { title: 'SelfMessenger', body: 'Neue Nachricht' },
+        data: {
+          title: 'SelfMessenger',
+          body: isCall ? 'Eingehender Anruf' : 'Neue Nachricht',
+          type: isCall ? 'call' : 'msg'
+        },
         android: { priority: 'high' }
       }
     })

@@ -21,25 +21,31 @@ class PushService : FirebaseMessagingService() {
     override fun onMessageReceived(msg: RemoteMessage) {
         val title = msg.data["title"] ?: "SelfMessenger"
         val body = msg.data["body"] ?: "Neue Nachricht"
-        notifyMessage(this, title, body)
+        notifyMessage(this, title, body, msg.data["type"] == "call")
     }
 
     companion object {
         const val CHANNEL = "selfmessenger_messages"
-        fun notifyMessage(ctx: Context, title: String, body: String) {
+        const val CHANNEL_CALL = "selfmessenger_calls"
+        fun notifyMessage(ctx: Context, title: String, body: String, isCall: Boolean = false) {
             val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            if (Build.VERSION.SDK_INT >= 26)
+            val channel = if (isCall) CHANNEL_CALL else CHANNEL
+            if (Build.VERSION.SDK_INT >= 26) {
                 nm.createNotificationChannel(NotificationChannel(CHANNEL, "Nachrichten", NotificationManager.IMPORTANCE_HIGH))
+                nm.createNotificationChannel(NotificationChannel(CHANNEL_CALL, "Anrufe", NotificationManager.IMPORTANCE_HIGH))
+            }
             // Tippen öffnet die App (und schließt die Benachrichtigung dank setAutoCancel)
             val launch = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             } ?: Intent()
             val piFlags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
-            val pi = PendingIntent.getActivity(ctx, 0, launch, piFlags)
-            val n = NotificationCompat.Builder(ctx, CHANNEL)
-                .setSmallIcon(android.R.drawable.stat_notify_chat)
-                .setContentTitle(title).setContentText(body)
+            val pi = PendingIntent.getActivity(ctx, if (isCall) 1 else 0, launch, piFlags)
+            val n = NotificationCompat.Builder(ctx, channel)
+                .setSmallIcon(if (isCall) android.R.drawable.sym_action_call else android.R.drawable.stat_notify_chat)
+                .setContentTitle(if (isCall) "Eingehender Anruf" else title)
+                .setContentText(if (isCall) "$body — tippen zum Annehmen" else body)
                 .setContentIntent(pi)
+                .setCategory(if (isCall) NotificationCompat.CATEGORY_CALL else NotificationCompat.CATEGORY_MESSAGE)
                 .setAutoCancel(true).setPriority(NotificationCompat.PRIORITY_HIGH).build()
             nm.notify(System.currentTimeMillis().toInt(), n)
         }

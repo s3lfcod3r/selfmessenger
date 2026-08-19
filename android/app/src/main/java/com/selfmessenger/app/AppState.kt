@@ -21,6 +21,14 @@ object AckBus {
     fun emit(pub: String, id: String, status: String) { _events.tryEmit(Triple(pub, id, status)) }
 }
 
+/** Eingehende Anruf-Einladung (per Push geweckt) → App öffnet den Chat und verbindet den wartenden Anruf. */
+data class IncomingCall(val pub: String, val name: String, val video: Boolean)
+object IncomingCallBus {
+    private val _events = MutableSharedFlow<IncomingCall>(extraBufferCapacity = 8)
+    val events = _events.asSharedFlow()
+    fun emit(c: IncomingCall) { _events.tryEmit(c) }
+}
+
 /** Offline empfangenes Medium (Bild/Datei/Sprache) für einen ggf. offenen Chat. */
 data class OfflineMedia(val pub: String, val kind: String, val name: String, val mime: String, val bytes: ByteArray)
 object OfflineMediaBus {
